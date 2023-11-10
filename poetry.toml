@@ -1,0 +1,6 @@
+# Keep cache for a project in the project directory
+cache-dir = ".poetry/cache"
+
+# Keep virtual environment in project directory. Useful in Jupyter to avoid recreating environment.
+[virtualenvs]
+in-project = true

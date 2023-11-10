@@ -1,0 +1,16 @@
+{
+  "template": "https://github.com/statisticsnorway/ssb-project-template-stat",
+  "commit": "15546f2c4f8e89eaec7afce10b7b674ff35a33bc",
+  "checkout": "1.1.4",
+  "context": {
+    "cookiecutter": {
+      "full_name": "Joel Parr",
+      "email": "jpa@ssb.no",
+      "project_name": "noku-ml",
+      "description": "",
+      "license_year": "2023",
+      "_template": "https://github.com/statisticsnorway/ssb-project-template-stat"
+    }
+  },
+  "directory": null
+}

@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "noku-ml"
+version = "0.1.0"
+description = ""
+authors = ["Joel Parr <jpa@ssb.no>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.12"
+dapla-toolbelt = ">=1.3.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7.1.3"
+ipykernel = ">=6.15.3"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
