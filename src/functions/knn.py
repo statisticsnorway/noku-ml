@@ -132,6 +132,7 @@ def knn(aar, enhet):
             "orgnr_bedrift",
             "orgnr_foretak",
             "omsetning",
+            "kommune",
             "naring_f",
             "naring4",
             "naring_f_4",
