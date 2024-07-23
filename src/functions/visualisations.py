@@ -282,46 +282,30 @@ def heatmap(df):
 
 #timeseries_knn_kommune
 def thematic_kommune(df):
-
-
     def update_map(variable, naring, year):
-        # Filter the main DataFrame for the selected year and possibly other conditions
+        # Filter the DataFrame for the selected year and other conditions
         kommuner = kommune.kommune(variable, naring, year, df)
-
-        # Create a new map instance with updated data
-        m = sg.ThematicMap(kommuner, column= variable, size=15)
-        m.title = "valgte variable i kommunene"
+        # Create and display the thematic map
+        m = sg.ThematicMap(kommuner, column=variable, size=15)
+        m.title = "Valgte variable i kommunene"
         m.plot()
 
-    # Create dropdowns for year and column based on available data
-    year_dropdown = widgets.Dropdown(
-        options=sorted(df['year'].unique()),
-        description='Year:'
-    )
-
-    naring_dropdown = widgets.Dropdown(
-        options=sorted(df['n3'].unique()),
-        description='naring:'
-    )
-
-    column_dropdown = widgets.Dropdown(
-        options=['oms', 
-               'forbruk', 
-               'salgsint', 
-               'drkost', 
-               'lonn', 
-               'syss', 
-               'resultat',
-               'lonn_pr_syss', 
-               'oms_pr_syss'],  # Update as per your actual columns
-        description='Variable:'
-    )
-
-    # Interactive widget to control the map
-    @widgets.interact(year=year_dropdown, variable=column_dropdown, naring=naring_dropdown)
+    # Define the interactive map function
     def interactive_map(variable, naring, year):
         clear_output(wait=True)
         update_map(variable, naring, year)
+
+    # Create dropdown widgets
+    year_dropdown = widgets.Dropdown(options=sorted(df['year'].unique()), description='Year:')
+    naring_dropdown = widgets.Dropdown(options=sorted(df['n3'].unique()), description='naring:')
+    column_dropdown = widgets.Dropdown(
+        options=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
+        description='Variable:'
+    )
+
+    # Use `interact` to bind the widgets and the function
+    interact_widget = widgets.interact(interactive_map, variable=column_dropdown, naring=naring_dropdown, year=year_dropdown)
+    display(interact_widget)
 
         
 
