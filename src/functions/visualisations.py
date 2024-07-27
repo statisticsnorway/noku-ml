@@ -149,6 +149,7 @@ def plots_time(df):
              chart_type=chart_type_selector)
 
 
+
 #timeseries_knn_agg
 def plot_all_time(df):
 
@@ -265,7 +266,7 @@ def heatmap(df):
             yaxis_title='Year',
             template='plotly_white',
             height=600,
-            width=1000,
+            width=800,
             xaxis_nticks=len(heatmap_data.columns),
             yaxis_nticks=len(heatmap_data.index)
         )

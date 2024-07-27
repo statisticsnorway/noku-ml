@@ -294,7 +294,7 @@ def split_input_data(year, limit):
     return good_df, onlygoodoms, bad_df, merged_df
 
 
-def create_training_data(df, year):
+def create_training_data(year, limit):
 
     fjor = year - 1
 
@@ -421,7 +421,7 @@ def create_training_data(df, year):
     bedrift.drop(columns_to_drop, axis=1, inplace=True)
 
     # Assuming 'bedrift' is your DataFrame
-    columns_to_fill = ["gjeldende_omseten_kr", "driftskost_kr"]
+    columns_to_fill = ["omsetn_kr", "driftskost_kr"]
 
     # Convert columns to numeric, replacing non-convertible values with NaN
     bedrift[columns_to_fill] = bedrift[columns_to_fill].apply(
@@ -439,7 +439,7 @@ def create_training_data(df, year):
 
     # Group by 'id' and calculate the sum
     grouped_bedrift = (
-        bedrift.groupby("id")[["gjeldende_omseten_kr", "driftskost_kr"]]
+        bedrift.groupby("id")[["omsetn_kr", "driftskost_kr"]]
         .sum()
         .reset_index()
     )
@@ -491,5 +491,196 @@ def create_training_data(df, year):
     # Fill NaN with a specific value (e.g., 0)
     merged_df["driftskostnader_percentage"].fillna(0, inplace=True)
     merged_df["omsetning_percentage"].fillna(0, inplace=True)
+    
+    # Create the 'Good' DataFrame
+    good_temp_df = merged_df[
+        (merged_df["omsetning_percentage"] >= limit)
+        & (merged_df["driftskostnader_percentage"] >= limit)
+    ]
 
-    return merged_df
+    # Create 'bedrift_count' and 'distribution_count'
+    good_temp_df["bedrift_count"] = good_temp_df.groupby("orgnr_n_1")[
+        "orgnr_n_1"
+    ].transform("count")
+    good_temp_df["distribution_count"] = good_temp_df.groupby("orgnr_n_1")[
+        "omsetn_kr"
+    ].transform(lambda x: (x > 0).sum())
+
+    # Create 'bad_temp' DataFrame based on conditions
+    bad_temp = good_temp_df[
+        (good_temp_df["bedrift_count"] > 5) & (good_temp_df["distribution_count"] <= 2)
+    ]
+
+    # Create 'good_df' by excluding rows from 'bad_temp'
+    good_df = (
+        pd.merge(good_temp_df, bad_temp, how="outer", indicator=True)
+        .query('_merge == "left_only"')
+        .drop("_merge", axis=1)
+    )
+
+
+    good_df["oms_share"] = good_df["omsetn_kr"] / good_df["tot_oms_fordelt"].round(5)
+
+    # Round the values to whole numbers before assigning to the new columns
+    good_df["new_oms"] = (
+        (good_df["oms_share"] * good_df["foretak_omsetning"]).round(0).astype(int)
+    )
+
+    good_df["oms_share"] = good_df["new_oms"] / good_df["tot_oms_fordelt"].round(5)
+
+
+    # Create the 'Mixed' DataFrame
+    onlygoodoms = merged_df[
+        (
+            (merged_df["omsetning_percentage"] > limit)
+            & (merged_df["driftskostnader_percentage"] <= limit)
+        )
+    ]
+    
+    training_data = pd.concat([good_df, onlygoodoms]).drop_duplicates(keep=False)
+    
+    # Assuming 'imputer' is your DataFrame and you want to select specific columns
+    selected_columns = [
+        "id",
+        "lopenr",
+        "forbruk",
+        "nacef_5",
+        "orgnr_n_1",
+        "salgsint",
+        "foretak_omsetning",
+        "tmp_no_p4005",
+        "foretak_driftskostnad",
+        "radnr",
+        "gjeldende_bdr_syss",
+        "fjor_driftskost_kr_t1",
+        "fjor_lonn_kr_t1",
+        "fjor_syssel_t1",
+        "gjeldende_lonn_kr",
+        "new_oms",
+        "b_kommunenr",
+    ]
+
+    # Create a new DataFrame with only the selected columns
+    imputer = training_data[selected_columns].copy()
+
+    training_data["n4"] = training_data["nacef_5"].str[:5]
+    
+    kommune_befolk = kommune_pop.befolkning_behandling(year, fjor)
+    kommune_inn = kommune_inntekt.inntekt_behandling(year, fjor)
+    kpi_df = kpi.process_kpi_data(year)
+    
+    # Convert string columns to numeric
+    training_data["gjeldende_bdr_syss"] = pd.to_numeric(
+        training_data["gjeldende_bdr_syss"], errors="coerce"
+    )
+    training_data["fjor_syssel_t1"] = pd.to_numeric(
+        training_data["fjor_syssel_t1"], errors="coerce"
+    )
+
+    # Perform division after conversion
+    training_data["emp_delta"] = training_data["gjeldende_bdr_syss"] / training_data["fjor_syssel_t1"]
+    
+    imputable_df = training_data.copy()
+
+
+    imputable_df = imputable_df.drop_duplicates(subset=["v_orgnr"])
+
+    # imputable_df['n4'] =  imputable_df['nacef_5'].str[:5]
+    imputable_df["n4"] = imputable_df["tmp_sn2007_5"].str[:5]
+
+    imputable_df = pd.merge(imputable_df, kommune_befolk, on="b_kommunenr", how="left")
+    imputable_df = pd.merge(imputable_df, kommune_inn, on="b_kommunenr", how="left")
+    imputable_df = pd.merge(imputable_df, kpi_df, on="n4", how="left")
+
+    # Ensure columns are numeric
+    imputable_df["fjor_omsetn_kr_t1"] = pd.to_numeric(
+        imputable_df["fjor_omsetn_kr_t1"], errors="coerce"
+    )
+    imputable_df["inflation_rate"] = pd.to_numeric(
+        imputable_df["inflation_rate"], errors="coerce"
+    )
+    imputable_df["befolkning_delta"] = pd.to_numeric(
+        imputable_df["befolkning_delta"], errors="coerce"
+    )
+    imputable_df["emp_delta"] = pd.to_numeric(imputable_df["emp_delta"], errors="coerce")
+    imputable_df["inntekt_delta"] = pd.to_numeric(
+        imputable_df["inntekt_delta"], errors="coerce"
+    )
+
+    general_inflation_rate = imputable_df.loc[
+        imputable_df["n4"] == "47.78", "inflation_rate"
+    ].values[0]
+    imputable_df["inflation_rate"] = imputable_df["inflation_rate"].fillna(
+        general_inflation_rate
+    )
+
+    imputable_df["inflation_rate_oms"] = (
+        imputable_df["fjor_omsetn_kr_t1"] * imputable_df["inflation_rate"]
+    )
+    imputable_df["befolkning_delta_oms"] = (
+        imputable_df["fjor_omsetn_kr_t1"] * imputable_df["befolkning_delta"]
+    )
+    imputable_df["emp_delta_oms"] = (
+        imputable_df["fjor_omsetn_kr_t1"] * imputable_df["emp_delta"]
+    )
+    imputable_df["inntekt_delta_oms"] = (
+        imputable_df["fjor_omsetn_kr_t1"] * imputable_df["inntekt_delta"]
+    )
+
+    # imputable_df['inflation_rate_oms'] = imputable_df['inflation_rate_oms'].round(0).astype(int)
+    # imputable_df['befolkning_delta_oms'] = imputable_df['befolkning_delta_oms'].round(0).astype(int)
+    # imputable_df['emp_delta_oms'] = imputable_df['emp_delta_oms'].round(0).astype(int)
+    # imputable_df['inntekt_delta_oms'] = imputable_df['inntekt_delta_oms'].round(0).astype(int)
+
+    # Treat Nan for inflation_rate_oms
+    imputable_df["inflation_rate_oms"].replace([np.inf, -np.inf], np.nan, inplace=True)
+    group_means = imputable_df.groupby("nacef_5")["inflation_rate_oms"].transform("mean")
+    # Step 3: Fill NaN values in 'inflation_rate_oms' with the corresponding group's mean
+    imputable_df["inflation_rate_oms"].fillna(group_means, inplace=True)
+
+
+    categories_to_impute = [
+        "emp_delta_oms",
+        "befolkning_delta_oms",
+        "inntekt_delta_oms",
+        "inflation_rate_oms",
+    ]
+
+    # Identify rows where 'b_sysselsetting_syss' is equal to 0
+    rows_to_impute = imputable_df["b_sysselsetting_syss"] == 0
+
+    # Replace NaN values with 0 for the identified rows and specified categories
+    imputable_df.loc[rows_to_impute, categories_to_impute] = imputable_df.loc[
+        rows_to_impute, categories_to_impute
+    ].fillna(0)
+
+
+    # Group by 'tmp_sn2007_5' and calculate the average 'emp_delta_oms'
+    average_foretak_oms_pr_naring = imputable_df.groupby("tmp_sn2007_5")[
+        "foretak_omsetning"
+    ].mean()
+
+    # Create a new column 'average_emp_delt_oms_pr_naring' and assign the calculated averages to it
+    imputable_df["average_emp_delt_oms_pr_naring"] = imputable_df["nacef_5"].map(
+        average_foretak_oms_pr_naring
+    )
+    imputable_df["average_emp_delt_oms_pr_naring"] = (
+        imputable_df["average_emp_delt_oms_pr_naring"].round(0).astype(int)
+    )
+    
+    imputable_df = imputable_df[~imputable_df["regtype"].isin(["04", "11"])]
+    
+    imputable_df["inflation_rate_oms"] = (
+        imputable_df["inflation_rate_oms"].round(0).astype(int)
+    )
+    imputable_df["befolkning_delta_oms"] = (
+        imputable_df["befolkning_delta_oms"].round(0).astype(int)
+    )
+    imputable_df["emp_delta_oms"] = (
+        imputable_df["emp_delta_oms"].round(0).astype(int)
+    )
+    imputable_df["inntekt_delta_oms"] = (
+        imputable_df["inntekt_delta_oms"].round(0).astype(int)
+)
+
+    return imputable_df

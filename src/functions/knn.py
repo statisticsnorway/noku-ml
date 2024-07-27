@@ -46,7 +46,7 @@ def knn(aar, enhet):
     # Now we can get the month number of the previous month
     previous_month = last_day_of_previous_month.strftime("%m")
 
-    VOFSTI = "ssb-prod-vof-data-delt/stedfesting-situasjonsuttak_data/klargjorte-data/parquet"
+    VOFSTI = "ssb-vof-data-delt-stedfesting-prod/klargjorte-data/parquet"
     file_path = f"{VOFSTI}/stedfesting-situasjonsuttak_p{current_year}-{previous_month}_v1.parquet"
 
     vof_df = dp.read_pandas(f"{file_path}")
@@ -421,3 +421,10 @@ def knn(aar, enhet):
 
     # Continue with your analysis using the filtered DataFrame
     return enhet_df, merged_gdf, reg_type_02_df, adjusted_result_df, naermeste_naboer
+
+
+enhet_df, merged_gdf, reg_type_02_df, adjusted_result_df, naermeste_naboer = knn("2021", "879263662")
+
+merged_gdf
+
+
