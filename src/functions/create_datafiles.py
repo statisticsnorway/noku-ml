@@ -134,7 +134,7 @@ def main(year, limit):
             "tmp_driftskostnad_9010",
             "tmp_driftskostnad_9910",
             "tmp_no_omsetn",
-            "tmp_no_p4005"
+            "tmp_no_p4005",
         ]
 
         foretak = foretak[selected_columns]

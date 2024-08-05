@@ -48,32 +48,32 @@ warnings.filterwarnings("ignore")
 
 def gather_visualisation_data(year):
     # Fetch paths to all Parquet files for the specified year related to foretak (enterprises)
-    fil_path = [
-        f for f in fs.glob(
-            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{year}/statistikkfil_foretak_pub.parquet"
-        ) if f.endswith(".parquet")
-    ]
+#     fil_path = [
+#         f for f in fs.glob(
+#             f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{year}/statistikkfil_foretak_pub.parquet"
+#         ) if f.endswith(".parquet")
+#     ]
 
-    # Use the ParquetDataset to read multiple Parquet files into a single Arrow Table
-    dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-    table = dataset.read()
+#     # Use the ParquetDataset to read multiple Parquet files into a single Arrow Table
+#     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+#     table = dataset.read()
 
-    # Convert the Arrow Table into a Pandas DataFrame
-    foretak_pub = table.to_pandas()
+#     # Convert the Arrow Table into a Pandas DataFrame
+#     foretak_pub = table.to_pandas()
 
     # Create a new column 'n3' extracting the first four characters from 'naring_f' column
     # Create a new column 'n2' extracting the first two characters from 'naring_f' column
-    foretak_pub['n3'] = foretak_pub['naring_f'].str[:4]
-    foretak_pub['n2'] = foretak_pub['naring_f'].str[:2]
+    # foretak_pub['n3'] = foretak_pub['naring_f'].str[:4]
+    # foretak_pub['n2'] = foretak_pub['naring_f'].str[:2]
 
     # Filter data where 'n2' indicates specific industry codes relevant to the analysis
-    foretak_varendel = foretak_pub[(foretak_pub['n2'] == '45') | (foretak_pub['n2'] == '46') | (foretak_pub['n2'] == '47')]
+#     foretak_varendel = foretak_pub[(foretak_pub['n2'] == '45') | (foretak_pub['n2'] == '46') | (foretak_pub['n2'] == '47')]
 
-    # Select only the relevant columns for further processing
-    foretak_varendel = foretak_varendel[['orgnr_foretak', 'naring_f', 'n2', 'n3', 'bearbeidingsverdi',
-                                         'produktinnsats', 'produksjonsverdi', 'omsetning', 
-                                         'nopost_driftsresultat', 'nopost_driftskostnader',
-                                         'nopost_driftsinntekter', 'sysselsetting_syss']]
+#     # Select only the relevant columns for further processing
+#     foretak_varendel = foretak_varendel[['orgnr_foretak', 'naring_f', 'n2', 'n3', 'bearbeidingsverdi',
+#                                          'produktinnsats', 'produksjonsverdi', 'omsetning', 
+#                                          'nopost_driftsresultat', 'nopost_driftskostnader',
+#                                          'nopost_driftsinntekter', 'sysselsetting_syss']]
 
     # Fetch and process time series data similar to the steps above
     fil_path = [f for f in fs.glob(f"gs://ssb-prod-noeku-data-produkt/temp/timeseries_knn.parquet") if f.endswith(".parquet")]
@@ -117,7 +117,7 @@ def gather_visualisation_data(year):
 
 
     # Return all prepared DataFrames for visualization or further analysis
-    return timeseries_knn_kommune, histogram_data, knn_data, timeseries_knn_agg, foretak_varendel, foretak_pub, koordinates
+    return timeseries_knn_kommune, histogram_data, knn_data, timeseries_knn_agg, koordinates
 
 #timeseries_knn_agg
 def plots_time(df):
@@ -151,6 +151,52 @@ def plots_time(df):
 
 
 #timeseries_knn_agg
+# def plot_all_time(df):
+
+#     def plot_all_n3(variable, chart_type):
+#         if chart_type == 'Line Chart':
+#             fig = px.line(df, x='year', y=variable, color='n3', markers=True,
+#                           title=f'Trend of {variable} over Years for all n3 categories')
+#         elif chart_type == 'Bar Chart':
+#             fig = px.bar(df, x='year', y=variable, color='n3',
+#                          title=f'Trend of {variable} over Years for all n3 categories')
+#         elif chart_type == 'Area Chart':
+#             wide_df = df.pivot_table(index='year', columns='n3', values=variable, aggfunc='sum').fillna(0)
+#             fig = px.area(wide_df, labels={'value': variable, 'year': 'Year'},
+#                           title=f'Trend of {variable} over Years for all n3 categories')
+
+#         # Adjust the layout
+#         fig.update_layout(
+#             xaxis_title='Year',
+#             yaxis_title=variable,
+#             template='plotly_white',
+#             height=800,  # Increased height to accommodate legend
+#             width=1000,  # Increased width to accommodate legend
+#             legend_title='n3',
+#             legend=dict(
+#                 x=1,  # Adjust the x position of the legend (1 is at the right end of the plot area)
+#                 xanchor='auto',  # Anchor point for the legend x position
+#                 y=1,  # Adjust the y position of the legend (1 is at the top of the plot area)
+#                 yanchor='auto',  # Anchor point for the legend y position
+#                 tracegroupgap=0,
+#                 title_font=dict(size=14),
+#                 font=dict(size=12, color="black"),
+#                 bgcolor="LightSteelBlue",
+#                 bordercolor="Black",
+#                 borderwidth=1
+#             )
+#         )
+
+#         # Optionally add an orientation to the legend if needed
+#         # fig.update_layout(legend_orientation="h")
+
+#         fig.show()
+
+#     chart_type_selector = Dropdown(options=['Line Chart', 'Bar Chart', 'Area Chart'], value='Line Chart', description='Chart Type:')
+#     interact(plot_all_n3, 
+#              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
+#              chart_type=chart_type_selector)
+
 def plot_all_time(df):
 
     def plot_all_n3(variable, chart_type):
@@ -161,9 +207,8 @@ def plot_all_time(df):
             fig = px.bar(df, x='year', y=variable, color='n3',
                          title=f'Trend of {variable} over Years for all n3 categories')
         elif chart_type == 'Area Chart':
-            wide_df = df.pivot_table(index='year', columns='n3', values=variable, aggfunc='sum').fillna(0)
-            fig = px.area(wide_df, labels={'value': variable, 'year': 'Year'},
-                          title=f'Trend of {variable} over Years for all n3 categories')
+            wide_df = df.pivot(index='year', columns='n3', values=variable).fillna(0)
+            fig = px.area(wide_df, title=f'Trend of {variable} over Years for all n3 categories')
 
         # Adjust the layout
         fig.update_layout(
@@ -196,6 +241,8 @@ def plot_all_time(df):
     interact(plot_all_n3, 
              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
              chart_type=chart_type_selector)
+
+
 
 #timeseries_knn_agg
 def plot_n2(df):   
@@ -718,6 +765,63 @@ def bubble_plot(df):
     
 
 # timeseries_knn_agg
+# def animated_barchart(df):
+
+#     # Function to compute and sort data based on the ranks
+#     def prepare_data(df, value_column):
+#         # Compute ranks within each year group
+#         df['rank'] = df.groupby('year')[value_column].rank("dense", ascending=False)
+#         # Sort by year and rank for correct plotting order
+#         return df.sort_values(by=['year', 'rank'], ascending=[True, True])
+
+#     # Create a color map for each unique 'n3' value
+#     color_map = {n3: f"#{hash(n3) & 0xFFFFFF:06x}" for n3 in df['n3'].unique()}
+
+#     # Dropdown widget for selecting the numerical variable
+#     dropdown = widgets.Dropdown(
+#         options=[col for col in df.columns if col not in ['year', 'n3']],
+#         value='oms',  # Default selection
+#         description='Variable:',
+#         disabled=False,
+#     )
+
+#     # Initial plotting function
+#     def initial_plot(value_column):
+#         ranked_df = prepare_data(df.copy(), value_column)
+#         fig = px.bar(
+#             ranked_df,
+#             x=value_column,
+#             y='n3',  # Use 'n3' for y-axis
+#             animation_frame='year',
+#             range_x=[0, ranked_df[value_column].max() + 10],
+#             color='n3',
+#             color_discrete_map=color_map,
+#             orientation='h',
+#             height=700,  # Increased height for better visibility
+#             width=1200   # Increased width
+#         )
+#         fig.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 1000
+#         fig.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 300
+#         fig.update_yaxes(categoryorder='total ascending')  # Ensure y-axis categories are sorted by total ascending
+#         fig.show()
+#         return fig
+
+#     # Update function for the dropdown
+#     def update_graph(change):
+#         fig = initial_plot(change.new)
+#         fig.show()
+
+#     # Observe changes in the dropdown
+#     fig = initial_plot(dropdown.value)
+#     dropdown.observe(update_graph, names='value')
+
+#     # Display the dropdown
+#     display(dropdown)
+
+import plotly.express as px
+from IPython.display import display
+import ipywidgets as widgets
+
 def animated_barchart(df):
 
     # Function to compute and sort data based on the ranks
@@ -733,7 +837,7 @@ def animated_barchart(df):
     # Dropdown widget for selecting the numerical variable
     dropdown = widgets.Dropdown(
         options=[col for col in df.columns if col not in ['year', 'n3']],
-        value='forbruk',  # Default selection
+        value='oms',  # Default selection
         description='Variable:',
         disabled=False,
     )
@@ -756,20 +860,28 @@ def animated_barchart(df):
         fig.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 1000
         fig.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 300
         fig.update_yaxes(categoryorder='total ascending')  # Ensure y-axis categories are sorted by total ascending
-        fig.show()
         return fig
 
     # Update function for the dropdown
     def update_graph(change):
-        fig = initial_plot(change.new)
-        fig.show()
+        # Clear the current output and display the updated plot
+        output.clear_output(wait=True)
+        with output:
+            fig = initial_plot(change.new)
+            fig.show()
 
     # Observe changes in the dropdown
-    fig = initial_plot(dropdown.value)
     dropdown.observe(update_graph, names='value')
 
-    # Display the dropdown
+    # Display the dropdown and the initial plot
+    output = widgets.Output()
     display(dropdown)
+    with output:
+        fig = initial_plot(dropdown.value)
+        fig.show()
+    display(output)
+
+
 
 #timeseries_knn_agg
 def scatter_3d(df):
@@ -813,3 +925,158 @@ def scatter_3d(df):
 
     # Display the interactive plot with the dropdown
     interact(plot_3d_scatter, selected_year=year_dropdown)
+    
+    
+    
+def guage(df):
+    
+    import plotly.graph_objects as go
+    from ipywidgets import interact, Dropdown
+
+    # Function to determine the color based on the percentage difference from the target
+    def determine_color(current, target):
+        diff_percent = ((current - target) / target) * 100
+        if diff_percent > 0.5:
+            return "red"
+        elif diff_percent >= -2:
+            return "green"
+        else:
+            return "yellow"
+
+    # Function to create gauge charts with overflow indication
+    def create_gauge_with_overflow(n3_f, variable):
+        df_filtered = df[df['n3_f'] == n3_f]
+        if variable == 'oms':
+            target = df_filtered['foretak_omsetning'].values[0]
+            current = df_filtered['oms'].values[0]
+        elif variable == 'new_drkost':
+            target = df_filtered['foretak_driftskostnad'].values[0]
+            current = df_filtered['new_drkost'].values[0]
+        elif variable == 'bedr_forbruk':
+            target = df_filtered['forbruk'].values[0]
+            current = df_filtered['bedr_forbruk'].values[0]
+        elif variable == 'bedr_salgsint':
+            target = df_filtered['salgsint'].values[0]
+            current = df_filtered['bedr_salgsint'].values[0]
+
+        color = determine_color(current, target)
+        # overflow = current > target
+        overflow = (current - target) / target > 0.02
+        overflow_value = current - target if overflow else 0
+
+        steps = [
+            {'range': [0, 0.2 * target], 'color': "red"},
+            {'range': [0.2 * target, 0.4 * target], 'color': "orange"},
+            {'range': [0.4 * target, 0.6 * target], 'color': "yellow"},
+            {'range': [0.6 * target, 0.8 * target], 'color': "lightgreen"},
+            {'range': [0.8 * target, target], 'color': "green"}
+        ]
+
+        if overflow:
+            steps.append({'range': [target, target * 1.5], 'color': "darkred"})
+
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=current,
+            title={'text': f"{n3_f} - {variable} (Total: {target:,})"},
+            gauge={
+                'axis': {'range': [0, target * 1.5], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': color, 'thickness': 0.2},  # Adjust thickness for a better pointer look
+                'steps': steps,
+                'threshold': {
+                    'line': {'color': "black", 'width': 4},
+                    'thickness': 0.75,
+                    'value': target
+                }
+            }
+        ))
+
+        if overflow:
+            fig.add_annotation(x=0.5, y=0.1,
+                               text=f"Overflow: {overflow_value:,}",
+                               showarrow=False,
+                               font=dict(size=12, color="red"))
+
+        fig.update_layout(
+            font={'size': 18},
+            margin=dict(t=100, b=50, l=50, r=50),  # Adjust margins for a cleaner look
+        )
+        fig.show()
+
+    # Dropdown widgets for interactivity
+    n3_f_dropdown = Dropdown(options=df['n3_f'].unique(), description='n3_f')
+    variable_dropdown = Dropdown(options=['oms', 'new_drkost', 'bedr_forbruk', 'bedr_salgsint'], description='Variable')
+
+    # Interactive widget
+    interact(create_gauge_with_overflow, n3_f=n3_f_dropdown, variable=variable_dropdown)
+
+    
+    
+def thermometer(df):
+    
+    # Function to determine the color based on the percentage difference from the target
+    def determine_color(current, target):
+        diff_percent = ((current - target) / target) * 100
+        if diff_percent > 0.5:
+            return "red"
+        elif diff_percent >= -2:
+            return "green"
+        else:
+            return "yellow"
+
+    # Function to create thermometer charts for a specific n3_f
+    def create_thermometer_charts(n3_f):
+        df_filtered = df[df['n3_f'] == n3_f]
+        metrics = ['oms', 'new_drkost', 'bedr_forbruk', 'bedr_salgsint']
+        targets = {
+            'oms': df_filtered['foretak_omsetning'].values[0],
+            'new_drkost': df_filtered['foretak_driftskostnad'].values[0],
+            'bedr_forbruk': df_filtered['forbruk'].values[0],
+            'bedr_salgsint': df_filtered['salgsint'].values[0]
+        }
+
+        fig = go.Figure()
+
+        for i, metric in enumerate(metrics):
+            target = targets[metric]
+            current = df_filtered[metric].values[0]
+            color = determine_color(current, target)
+
+            fig.add_trace(go.Bar(
+                x=[metric],
+                y=[current],
+                marker_color=color,
+                name=f"{metric} (Current)",
+                hoverinfo='y+text',
+                text=f"Current: {current}<br>Target: {target}",
+                textposition='auto',
+                width=0.3
+            ))
+
+            # Add target line
+            fig.add_trace(go.Scatter(
+                x=[metric],
+                y=[target],
+                mode='markers+text',
+                marker=dict(size=10, color='black'),
+                name=f"{metric} (Target)",
+                text=[f"Target: {target}"],
+                textposition='top center',
+                showlegend=False
+            ))
+
+        fig.update_layout(
+            title_text=f"Thermometer Chart for {n3_f}",
+            barmode='group',
+            yaxis=dict(range=[0, max(targets.values()) * 1.1]),
+            height=500,
+            width=800,
+            margin=dict(t=100, b=50, l=50, r=50)
+        )
+        fig.show()
+
+    # Dropdown widget for interactivity
+    n3_f_dropdown = Dropdown(options=df['n3_f'].unique(), description='n3_f')
+
+    # Interactive widget
+    interact(create_thermometer_charts, n3_f=n3_f_dropdown)

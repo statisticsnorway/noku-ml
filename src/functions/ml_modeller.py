@@ -135,29 +135,25 @@ def hente_training_data():
         
     return training_data, imputatable_df, foretak_pub
 
-def xgboost_model(training_df, scaler, df_estimeres):
+def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
 
     import numpy as np
     import xgboost as xgb
-    from sklearn.model_selection import train_test_split, cross_val_score
+    from sklearn.model_selection import train_test_split, GridSearchCV
     from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-    from sklearn.preprocessing import OneHotEncoder, StandardScaler
+    from sklearn.preprocessing import OneHotEncoder
     from sklearn.compose import ColumnTransformer
-    from sklearn.pipeline import Pipeline
     import matplotlib.pyplot as plt
     import shap
-    
-    df = training_df.copy()
-    
-    imputed_df = df_estimeres.copy() 
 
+    df = training_df.copy()
+    imputed_df = df_estimeres.copy()
     df = df.dropna(subset=['new_oms'])
     
     # Convert object types to category
     categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
-
 
     # Define features and target variable
     X = df.drop(columns=["new_oms"])
@@ -176,36 +172,16 @@ def xgboost_model(training_df, scaler, df_estimeres):
         'oms_syssmean_basedOn_naring_kommune'
     ]
 
-    # # Preprocessing pipeline
+    # Preprocessing pipeline
     preprocessor = ColumnTransformer(
         transformers=[
-            ("num", "passthrough", numerical_features),  # No transformation for numerical features
+            ("num", scaler, numerical_features),  # Apply scaling to numerical features
             ("cat", OneHotEncoder(categories="auto", handle_unknown="ignore"), categorical_features),  # One-hot encoding for categorical features
         ]
     )
 
-    # Preprocessing pipeline
-    preprocessor = ColumnTransformer(
-        transformers=[
-            (
-                "num",
-                # StandardScaler(),
-                scaler,
-                numerical_features,
-            ),  # Apply standard scaling to numerical features
-            (
-                "cat",
-                OneHotEncoder(categories="auto", handle_unknown="ignore"),
-                categorical_features,
-            ),  # One-hot encoding for categorical features
-        ]
-    )
-
     # Split the dataset into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # Fit the preprocessor on the training data
     preprocessor.fit(X_train)
@@ -214,22 +190,35 @@ def xgboost_model(training_df, scaler, df_estimeres):
     X_train_transformed = preprocessor.transform(X_train).toarray()
     X_test_transformed = preprocessor.transform(X_test).toarray()
 
-    # Define the model
-    
-    # regressor = xgb.XGBRegressor(eval_metric="mae")
-    # regressor = xgb.XGBRegressor(eval_metric="mae", random_state=42)
-    regressor = xgb.XGBRegressor(eval_metric="rmse", random_state=42)
-    # regressor = xgb.XGBRegressor(eval_metric="mse", random_state=42)
+    if GridSearch:
+        # Define the model
+        regressor = xgb.XGBRegressor(eval_metric="rmse", random_state=42)
 
-    # Train the model with learning history
-    eval_set = [(X_train_transformed, y_train), (X_test_transformed, y_test)]
-    regressor.fit(
-        X_train_transformed,
-        y_train,
-        eval_set=eval_set,
-        # early_stopping_rounds=10,
-        verbose=False,
-    )
+        # Define parameter grid for GridSearch
+        param_grid = {
+            'n_estimators': [50, 100, 200],
+            'max_depth': [3, 5, 7],
+            'learning_rate': [0.01, 0.1, 0.2],
+            'subsample': [0.8, 1.0],
+            'colsample_bytree': [0.8, 1.0]
+        }
+
+        # Grid search with cross-validation
+        grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3, verbose=1)
+        grid_search.fit(X_train_transformed, y_train)
+
+        # Print best parameters
+        print("Best parameters found by GridSearch:", grid_search.best_params_)
+
+        # Use best estimator from grid search
+        regressor = grid_search.best_estimator_
+    else:
+        # Define the model with default parameters
+        regressor = xgb.XGBRegressor(eval_metric="rmse", random_state=42)
+
+        # Train the model
+        eval_set = [(X_train_transformed, y_train), (X_test_transformed, y_test)]
+        regressor.fit(X_train_transformed, y_train, eval_set=eval_set, verbose=False)
 
     # Evaluate the model
     y_pred = regressor.predict(X_test_transformed)
@@ -238,24 +227,12 @@ def xgboost_model(training_df, scaler, df_estimeres):
     negative_indices = np.where(y_pred < 0)[0]
     negative_predictions = y_pred[y_pred < 0]
 
-    # Print out negative predictions
     if len(negative_predictions) > 0:
-        print(
-            "There are negative predictions. Consider printing out negative_df to check why, and treat these values accordingly. Here are the details:"
-        )
-
-        # print count of negative predictions
         print("Number of negative predictions:", len(negative_predictions))
-        # Print original features and predicted values for negative predictions
-        print(negative_predictions)
+#         print(negative_predictions)
 
-        negative_df = X_test.iloc[
-            negative_indices
-        ]  # Select corresponding rows from X_test
-        negative_df["predicted_oms"] = y_pred[
-            negative_indices
-        ]  # Add predicted values
-
+#         negative_df = X_test.iloc[negative_indices]
+#         negative_df["predicted_oms"] = y_pred[negative_indices]
     else:
         print("No negative predictions found.")
         
@@ -270,14 +247,11 @@ def xgboost_model(training_df, scaler, df_estimeres):
 
     # Plot the learning history
     results = regressor.evals_result()
-    # epochs = len(results["validation_0"]["rmse"])
     epochs = len(results["validation_0"]["rmse"])
     x_axis = range(0, epochs)
     plt.figure(figsize=(10, 5))
     plt.plot(x_axis, results["validation_0"]["rmse"], label="Train")
     plt.plot(x_axis, results["validation_1"]["rmse"], label="Test")
-    # plt.plot(x_axis, results["validation_0"]["mae"], label="Train")
-    # plt.plot(x_axis, results["validation_1"]["mae"], label="Test")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("RMSE")
@@ -310,70 +284,59 @@ def xgboost_model(training_df, scaler, df_estimeres):
     print(booster.get_dump()[0])  # Print the first tree
 
     # SHAP values
-    # explainer = shap.Explainer(regressor, X_train_transformed)
     explainer = shap.TreeExplainer(regressor, X_train_transformed)
-    # shap_values = explainer(X_test_transformed)
     shap_values = explainer.shap_values(X_test_transformed)
 
     # Get feature names after one-hot encoding
     feature_names = preprocessor.get_feature_names_out()
-    
-    # print(feature_names)
 
     # Summary plot of SHAP values
     shap.summary_plot(shap_values, X_test_transformed, feature_names=feature_names)
 
     # Force plot for a single prediction (e.g., the first instance)
     shap.initjs()
-    shap.force_plot(
-        explainer.expected_value, shap_values[0], X_test_transformed[0], feature_names=feature_names
-    )
+    shap.force_plot(explainer.expected_value, shap_values[0], X_test_transformed[0], feature_names=feature_names)
 
     # Find the correct index for the feature "verdi"
     verdi_index = list(feature_names).index("num__new_oms_trendForecast")
 
     # Dependence plot to show the effect of a single feature across the dataset
-    shap.dependence_plot(
-        verdi_index, shap_values, X_test_transformed, feature_names=feature_names
-    )
-    
+    shap.dependence_plot(verdi_index, shap_values, X_test_transformed, feature_names=feature_names)
 
     imputed_X = imputed_df.drop(columns=["new_oms"])
-
     imputed_X_transformed = preprocessor.transform(imputed_X)
     imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
 
     imputed_df['predicted_oms'] = imputed_df['predicted_oms'].clip(lower=0)
-
-    # Ensure the column type is float
     imputed_df['predicted_oms'] = imputed_df['predicted_oms'].astype(float)
     
     return imputed_df
 
-def knn_model(training_df, scaler, df_estimeres):
+
+def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
 
     import numpy as np
-    from sklearn.model_selection import train_test_split, cross_val_score
+    from sklearn.model_selection import train_test_split, GridSearchCV
     from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-    from sklearn.preprocessing import OneHotEncoder, StandardScaler
+    from sklearn.preprocessing import OneHotEncoder
     from sklearn.compose import ColumnTransformer
-    from sklearn.pipeline import Pipeline
     from sklearn.neighbors import KNeighborsRegressor
     import matplotlib.pyplot as plt
 
     df = training_df.copy()
-    
     imputed_df = df_estimeres.copy()
- 
+
     columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
-    numeric_columns_to_fill = ["inntekt_delta_oms",
+    numeric_columns_to_fill = [
+        "inntekt_delta_oms",
         "emp_delta_oms",
         "befolkning_delta_oms",
         "inflation_rate_oms",
         "gjeldende_bdr_syss",
         "new_oms_trendForecast",
         'oms_syssmean_basedOn_naring',
-        'oms_syssmean_basedOn_naring_kommune']
+        'oms_syssmean_basedOn_naring_kommune'
+    ]
 
     # Fill NaN values with 'missing' for the specified columns
     df[columns_to_fill] = df[columns_to_fill].fillna('missing')
@@ -414,9 +377,32 @@ def knn_model(training_df, scaler, df_estimeres):
     X_train_transformed = preprocessor.transform(X_train)
     X_test_transformed = preprocessor.transform(X_test)
 
-    regressor = KNeighborsRegressor(n_neighbors=5)
+    if GridSearch:
+        # Define the model
+        regressor = KNeighborsRegressor()
 
-    regressor.fit(X_train_transformed, y_train)
+        # Define parameter grid for GridSearch
+        param_grid = {
+            'n_neighbors': [2, 3, 5, 7]
+        }
+
+        # Grid search with cross-validation
+        grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3, verbose=1)
+        grid_search.fit(X_train_transformed, y_train)
+
+        # Print best parameters
+        print("Best parameters found by GridSearch:", grid_search.best_params_)
+
+        # Use best estimator from grid search
+        regressor = grid_search.best_estimator_
+    else:
+        # Define the model with default parameters
+        # best results so far n = 2
+        regressor = KNeighborsRegressor(n_neighbors=2)
+
+        # Train the model
+        regressor.fit(X_train_transformed, y_train)
+
     y_pred = regressor.predict(X_test_transformed)
 
     mse = mean_squared_error(y_test, y_pred)
@@ -426,7 +412,7 @@ def knn_model(training_df, scaler, df_estimeres):
     print("R-squared:", r_squared)
     print("Mean Absolute Error:", mae)
     
-       # Plot Predicted vs. Actual Values
+    # Plot Predicted vs. Actual Values
     plt.figure(figsize=(10, 5))
     plt.scatter(y_test, y_pred, alpha=0.3)
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--", lw=2)
@@ -445,12 +431,12 @@ def knn_model(training_df, scaler, df_estimeres):
     plt.title("Residuals Plot")
     plt.show()
 
-
     imputed_X = imputed_df.drop(columns=["new_oms"])
     imputed_X_transformed = preprocessor.transform(imputed_X)
     imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
     
     return imputed_df
+
 
 
 
@@ -769,3 +755,76 @@ def knn_n3_klass(df):
 
     plot_learning_curve(clf, "Learning Curve for KNN Classifier", X_train, y_train, cv=5)
     plt.show()
+    
+    
+def test_results(df, aar):
+    
+    fil_path = [
+        f
+        for f in fs.glob(
+            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{aar}/statistikkfil_bedrifter_nr.parquet"
+        )
+        if f.endswith(".parquet")
+    ]
+
+    # Use the ParquetDataset to read multiple files
+    dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+    table = dataset.read()
+
+    # Convert to Pandas DataFrame
+    bedrift_2 = table.to_pandas()
+
+    # change pd option to show all columns
+    pd.set_option("display.max_columns", None)
+
+    bedrift_2 = bedrift_2[['orgnr_bedrift', 'omsetning', 'nopost_driftskostnader']]
+    
+    bedrift_1 = df[['v_orgnr', 'oms', 'new_drkost', 'regtype']]
+
+    # rename 
+    bedrift_1.rename(columns={"v_orgnr": "orgnr_bedrift"}, inplace=True)
+    print(bedrift_1.shape)
+    test = bedrift_1.merge(bedrift_2, on='orgnr_bedrift', how='left')
+    test = test.drop_duplicates()
+    test = test.dropna()
+    
+    # Calculate the absolute difference
+    test['oms_diff'] = (test['oms'] - test['omsetning']).abs()
+
+    # Sort the DataFrame by the 'oms_diff' column in descending order
+    test_sorted = test.sort_values(by='oms_diff', ascending=False)
+
+    # Display the sorted DataFrame
+    test_sorted.head()
+
+    # create new df where regtype == 02
+
+    test_02 = test_sorted[test_sorted['regtype'] == '02']
+    
+    # Assuming your DataFrame is named 'test' and has columns 'oms' and 'omsetning'
+    oms = test['oms']
+    omsetning = test['omsetning']
+
+    # Calculate Mean Absolute Error (MAE)
+    mae = mean_absolute_error(omsetning, oms)
+    print(f'Mean Absolute Error for entire delreg: {mae}')
+
+    # Calculate R-squared (R²)
+    r2 = r2_score(omsetning, oms)
+    print(f'R² Score for entire delreg: {r2}')
+    
+    
+    print(f'-----------------------------------')
+    
+    # Assuming your DataFrame is named 'test' and has columns 'oms' and 'omsetning'
+    oms = test_02['oms']
+    omsetning = test_02['omsetning']
+
+    # Calculate Mean Absolute Error (MAE)
+    mae = mean_absolute_error(omsetning, oms)
+    print(f'Mean Absolute Error for reg_type 02: {mae}')
+
+    # Calculate R-squared (R²)
+    r2 = r2_score(omsetning, oms)
+    print(f'R² Score for reg_type 02: {r2}')
+

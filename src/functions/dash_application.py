@@ -17,11 +17,11 @@ sys.path.append("../functions")
 import kommune
 import visualisations 
 
-def run_dash_app(aar):
+def run_dash_app(aar, timeseries_knn_kommune, histogram_data, knn_data, timeseries_knn_agg, koordinates):
 
     # Load data
     aar = 2021
-    timeseries_knn_kommune, histogram_data, knn_data, timeseries_knn_agg, foretak_varendel, foretak_pub, koordinates = visualisations.gather_visualisation_data(aar)
+    # timeseries_knn_kommune, histogram_data, knn_data, timeseries_knn_agg, foretak_varendel, foretak_pub, koordinates = visualisations.gather_visualisation_data(aar)
 
     # Getting environment variables for proper integration with JupyterHub
     port = 8063
