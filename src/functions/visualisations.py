@@ -47,33 +47,6 @@ warnings.filterwarnings("ignore")
 
 
 def gather_visualisation_data(year):
-    # Fetch paths to all Parquet files for the specified year related to foretak (enterprises)
-#     fil_path = [
-#         f for f in fs.glob(
-#             f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{year}/statistikkfil_foretak_pub.parquet"
-#         ) if f.endswith(".parquet")
-#     ]
-
-#     # Use the ParquetDataset to read multiple Parquet files into a single Arrow Table
-#     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-#     table = dataset.read()
-
-#     # Convert the Arrow Table into a Pandas DataFrame
-#     foretak_pub = table.to_pandas()
-
-    # Create a new column 'n3' extracting the first four characters from 'naring_f' column
-    # Create a new column 'n2' extracting the first two characters from 'naring_f' column
-    # foretak_pub['n3'] = foretak_pub['naring_f'].str[:4]
-    # foretak_pub['n2'] = foretak_pub['naring_f'].str[:2]
-
-    # Filter data where 'n2' indicates specific industry codes relevant to the analysis
-#     foretak_varendel = foretak_pub[(foretak_pub['n2'] == '45') | (foretak_pub['n2'] == '46') | (foretak_pub['n2'] == '47')]
-
-#     # Select only the relevant columns for further processing
-#     foretak_varendel = foretak_varendel[['orgnr_foretak', 'naring_f', 'n2', 'n3', 'bearbeidingsverdi',
-#                                          'produktinnsats', 'produksjonsverdi', 'omsetning', 
-#                                          'nopost_driftsresultat', 'nopost_driftskostnader',
-#                                          'nopost_driftsinntekter', 'sysselsetting_syss']]
 
     # Fetch and process time series data similar to the steps above
     fil_path = [f for f in fs.glob(f"gs://ssb-prod-noeku-data-produkt/temp/timeseries_knn.parquet") if f.endswith(".parquet")]
@@ -148,55 +121,45 @@ def plots_time(df):
              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'], 
              chart_type=chart_type_selector)
 
+# def plots_time(df):
+
+#     def plot_variable(n3, variable, chart_type):
+#         filtered_df = df[df['n3'] == n3]
+
+#         if chart_type == 'Line Chart':
+#             fig = px.line(filtered_df, x='year', y=variable, markers=True, title=f'{variable} over Years for {n3}')
+            
+#             # Add a glow effect
+#             fig.add_scatter(x=filtered_df['year'], y=filtered_df[variable],
+#                             mode='lines', line=dict(width=12, color='rgba(255, 0, 0, 0.2)'), name='Glow')
+#             fig.add_scatter(x=filtered_df['year'], y=filtered_df[variable],
+#                             mode='lines', line=dict(width=8, color='rgba(255, 0, 0, 0.4)'), name='Glow')
+#             fig.add_scatter(x=filtered_df['year'], y=filtered_df[variable],
+#                             mode='lines', line=dict(width=4, color='rgba(255, 0, 0, 0.6)'), name='Glow')
+
+#         elif chart_type == 'Bar Chart':
+#             fig = px.bar(filtered_df, x='year', y=variable, title=f'{variable} over Years for {n3}')
+#         elif chart_type == 'Scatter Plot':
+#             fig = px.scatter(filtered_df, x='year', y=variable, title=f'{variable} over Years for {n3}')
+
+#         fig.update_layout(xaxis_title='Year',
+#                           yaxis_title=variable,
+#                           template='plotly_white',
+#                           xaxis=dict(showgrid=True),
+#                           yaxis=dict(showgrid=True))
+#         fig.show()
+
+#     # Dropdown menu for the type of chart
+#     chart_type_selector = Dropdown(options=['Line Chart', 'Bar Chart', 'Scatter Plot'], value='Line Chart', description='Chart Type:')
+
+#     # Interactive widget setup
+#     interact(plot_variable, 
+#              n3=sorted(df['n3'].unique()), 
+#              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'], 
+#              chart_type=chart_type_selector)
 
 
 #timeseries_knn_agg
-# def plot_all_time(df):
-
-#     def plot_all_n3(variable, chart_type):
-#         if chart_type == 'Line Chart':
-#             fig = px.line(df, x='year', y=variable, color='n3', markers=True,
-#                           title=f'Trend of {variable} over Years for all n3 categories')
-#         elif chart_type == 'Bar Chart':
-#             fig = px.bar(df, x='year', y=variable, color='n3',
-#                          title=f'Trend of {variable} over Years for all n3 categories')
-#         elif chart_type == 'Area Chart':
-#             wide_df = df.pivot_table(index='year', columns='n3', values=variable, aggfunc='sum').fillna(0)
-#             fig = px.area(wide_df, labels={'value': variable, 'year': 'Year'},
-#                           title=f'Trend of {variable} over Years for all n3 categories')
-
-#         # Adjust the layout
-#         fig.update_layout(
-#             xaxis_title='Year',
-#             yaxis_title=variable,
-#             template='plotly_white',
-#             height=800,  # Increased height to accommodate legend
-#             width=1000,  # Increased width to accommodate legend
-#             legend_title='n3',
-#             legend=dict(
-#                 x=1,  # Adjust the x position of the legend (1 is at the right end of the plot area)
-#                 xanchor='auto',  # Anchor point for the legend x position
-#                 y=1,  # Adjust the y position of the legend (1 is at the top of the plot area)
-#                 yanchor='auto',  # Anchor point for the legend y position
-#                 tracegroupgap=0,
-#                 title_font=dict(size=14),
-#                 font=dict(size=12, color="black"),
-#                 bgcolor="LightSteelBlue",
-#                 bordercolor="Black",
-#                 borderwidth=1
-#             )
-#         )
-
-#         # Optionally add an orientation to the legend if needed
-#         # fig.update_layout(legend_orientation="h")
-
-#         fig.show()
-
-#     chart_type_selector = Dropdown(options=['Line Chart', 'Bar Chart', 'Area Chart'], value='Line Chart', description='Chart Type:')
-#     interact(plot_all_n3, 
-#              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
-#              chart_type=chart_type_selector)
-
 def plot_all_time(df):
 
     def plot_all_n3(variable, chart_type):
@@ -207,8 +170,9 @@ def plot_all_time(df):
             fig = px.bar(df, x='year', y=variable, color='n3',
                          title=f'Trend of {variable} over Years for all n3 categories')
         elif chart_type == 'Area Chart':
-            wide_df = df.pivot(index='year', columns='n3', values=variable).fillna(0)
-            fig = px.area(wide_df, title=f'Trend of {variable} over Years for all n3 categories')
+            wide_df = df.pivot_table(index='year', columns='n3', values=variable, aggfunc='sum').fillna(0)
+            fig = px.area(wide_df, labels={'value': variable, 'year': 'Year'},
+                          title=f'Trend of {variable} over Years for all n3 categories')
 
         # Adjust the layout
         fig.update_layout(
@@ -241,7 +205,6 @@ def plot_all_time(df):
     interact(plot_all_n3, 
              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
              chart_type=chart_type_selector)
-
 
 
 #timeseries_knn_agg

@@ -43,14 +43,13 @@ import kommune_translate
 
 def main(year, limit):
     start_year = 2017
-    all_good_dataframes = []
-    all_bad_dataframes = []
-    all_training_dataframes = []
-    all_time_series_dataframes = []
-    
+    all_good_dataframes = []  # List to store good dataframes for each year
+    all_bad_dataframes = []   # List to store bad dataframes for each year
+    all_training_dataframes = []  # List to store training dataframes for each year
+    all_time_series_dataframes = []  # List to store time series dataframes for each year
+
     for current_year in range(start_year, year + 1):
-        
-        fjor = current_year -1
+        fjor = current_year - 1  # Previous year
         
         skjema_list = 'RA-0174-1'
         fil_path = [
@@ -69,56 +68,58 @@ def main(year, limit):
         skjema = table.to_pandas()
                
         felt_id_values = [
-        "V_ORGNR",
-        "F_ADRESSE",
-        "FJOR_NACE_B_T1",
-        "TMP_SN2007_5",
-        "B_KOMMUNENR",
-        "REGTYPE",
-        "B_SYSSELSETTING_SYSS",
-        "TMP_NY_BDR_SYSS",
-        "GJELDENDE_BDR_SYSS",
-        "FJOR_SYSSEL_T1",
-        "LONN_PST_AORDN",
-        "GJELDENDE_LONN_KR",
-        "LONN",
-        "FJOR_LONN_KR_T1",
-        "TMP_SNITTLONN",
-        "FJOR_SNITTLONN_T1",
-        "GJELDENDE_OMSETN_KR",
-        "OMSETN_KR",
-        "FJOR_OMSETN_KR_T1",
-        "TMP_SNITTOMS",
-        "FJOR_SNITTOMS_T1",
-        "TMP_SALGSINT_BED",
-        "TMP_FORBRUK_BED",
-        "VAREKOST_BED",
-        "GJELDENDE_DRIFTSK_KR",
-        "DRIFTSKOST_KR",
-        "FJOR_DRIFTSKOST_KR_T1",
-        "NACEF_5",
-        "SALGSINT",
-        "FORBRUK",
-        "TMP_NO_P4005",
-        "TMP_AVPROS_ORGFORB",
-        "ORGNR_N_1",
-        "TMP_NO_OMSETN",
-        "TMP_DRIFTSKOSTNAD_9010",
-        "TMP_DRIFTSKOSTNAD_9910",
+            "V_ORGNR",
+            "F_ADRESSE",
+            "FJOR_NACE_B_T1",
+            "TMP_SN2007_5",
+            "B_KOMMUNENR",
+            "REGTYPE",
+            "B_SYSSELSETTING_SYSS",
+            "TMP_NY_BDR_SYSS",
+            "GJELDENDE_BDR_SYSS",
+            "FJOR_SYSSEL_T1",
+            "LONN_PST_AORDN",
+            "GJELDENDE_LONN_KR",
+            "LONN",
+            "FJOR_LONN_KR_T1",
+            "TMP_SNITTLONN",
+            "FJOR_SNITTLONN_T1",
+            "GJELDENDE_OMSETN_KR",
+            "OMSETN_KR",
+            "FJOR_OMSETN_KR_T1",
+            "TMP_SNITTOMS",
+            "FJOR_SNITTOMS_T1",
+            "TMP_SALGSINT_BED",
+            "TMP_FORBRUK_BED",
+            "VAREKOST_BED",
+            "GJELDENDE_DRIFTSK_KR",
+            "DRIFTSKOST_KR",
+            "FJOR_DRIFTSKOST_KR_T1",
+            "NACEF_5",
+            "SALGSINT",
+            "FORBRUK",
+            "TMP_NO_P4005",
+            "TMP_AVPROS_ORGFORB",
+            "ORGNR_N_1",
+            "TMP_NO_OMSETN",
+            "TMP_DRIFTSKOSTNAD_9010",
+            "TMP_DRIFTSKOSTNAD_9910",
         ]
 
-        # Assuming `skjema` is your DataFrame and `felt_id_values` is your list of values
+        # Filter the DataFrame for the specified field values
         skjema = skjema[skjema["feltnavn"].isin(felt_id_values)]
         
+        # Pivot the DataFrame
         skjema = skjema.pivot_table(
-        index=["id", "radnr", "lopenr"],
-        columns="feltnavn",
-        values="feltverdi",
-        aggfunc="first",
+            index=["id", "radnr", "lopenr"],
+            columns="feltnavn",
+            values="feltverdi",
+            aggfunc="first",
         )
         skjema = skjema.reset_index()
-        skjema.columns = skjema.columns.str.lower()
+        skjema.columns = skjema.columns.str.lower()  # Convert column names to lower case
         
+        # Foretak level data is always when radnr = 0
         foretak = skjema.loc[skjema["radnr"] == 0]
 
         # Create the 'bedrift' DataFrame
@@ -601,16 +602,6 @@ def main(year, limit):
     num_cores = multiprocessing.cpu_count()
     print(f"Number of CPU cores available: {num_cores}")
 
-    # Assuming training_data is already created
-    # training_data = create_datafiles.main(2021, 0.65)[3] # Uncomment and use your actual function call if needed
-
-    # Define the numerical columns
-    # numerical_columns = [
-    #     "new_oms", "inntekt_delta_oms", "emp_delta_oms",
-    #     "befolkning_delta_oms", "inflation_rate_oms", 
-    #     "gjeldende_bdr_syss", "b_sysselsetting_syss"
-    # ]
-
     numerical_columns = [
         "new_oms"
     ]
@@ -741,8 +732,6 @@ def main(year, limit):
     combined_gdf = combined_gdf.drop_duplicates()
 
     training_data = pd.merge(training_data, combined_gdf, on="v_orgnr", how="left")
-    # current_year_good_oms = pd.merge(current_year_good_oms, combined_gdf, on="v_orgnr", how="left")
-    # current_year_bad_oms = pd.merge(current_year_bad_oms, combined_gdf, on="v_orgnr", how="left")
     
     temp = training_data.copy()
     
@@ -751,23 +740,7 @@ def main(year, limit):
     merging_df = current_year_bad_oms[['v_orgnr', 'id', 'year', 'lopenr']]
 
     imputatable_df = pd.merge(merging_df, temp, on=['v_orgnr', 'id', 'year'], how='left')
-    
-#     common_columns = current_year_bad_oms.columns.intersection(training_data.columns).tolist()
-#     common_columns.remove('v_orgnr')  # Ensure 'v_orgnr' is not dropped
-#     common_columns.remove('year')  # Ensure 'v_orgnr' is not dropped
-    
-#     current_year_bad_oms_temp = current_year_bad_oms.drop(columns=common_columns)
-
-#     # Perform a left join
-#     merged_df = current_year_bad_oms_temp.merge(training_data, on=['v_orgnr', 'year', 'id'], how='left')
-
-#     # Ensure the resulting DataFrame has the same columns as training_data
-#     imputation_df = merged_df[training_data.columns]
-    
+      
     training_data = training_data[~training_data['v_orgnr'].isin(v_orgnr_list_for_imputering)]
-    
-    # if orgnr_foretak is NaN remove row
-    # imputation_df = imputation_df[~imputation_df['orgnr_foretak'].isnull()]S
-    
 
     return current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df

@@ -15,7 +15,8 @@ def fetch_inntekt_data(year):
 
     import pyjstat
     from pyjstat import pyjstat
-
+    
+    # Query SSB API
     POST_URL = "https://data.ssb.no/api/v0/no/table/06944/"
     bef_kom = {
         "query": [
@@ -977,7 +978,7 @@ def fetch_inntekt_data(year):
         "response": {"format": "json-stat2"},
     }
 
-    # Behandler spørringen
+    # Collect data
     resultat1 = requests.post(POST_URL, json=bef_kom)
 
     # Check if request was successful
@@ -1002,52 +1003,64 @@ def fetch_inntekt_data(year):
 
 
 def inntekt_behandling(year, fjor):
-
+    
     import sys
-
     import numpy as np
 
     sys.path.append("../functions")
 
     import kommune_translate
 
+    # Fetch income data for the current year and previous year
     df1 = fetch_inntekt_data(year)
     df2 = fetch_inntekt_data(fjor)
 
+    # Drop rows with NaN values in the 'value' column
     df1 = df1.dropna(subset=["value"])
     df2 = df2.dropna(subset=["value"])
 
+    # Convert year and previous year to integers
     year_int = int(year)
     fjor_int = int(fjor)
 
+    # Add 'year' column to each dataframe
     df1["year"] = year_int
     df2["year"] = fjor_int
 
-    # Check if the year is less than 2020 before translating
+    # Translate municipality codes if the year is less than 2020
     if df1["year"].iloc[0] < 2020:
         df1 = kommune_translate.translate_kommune_kodes(df1)
     if df2["year"].iloc[0] < 2020:
         df2 = kommune_translate.translate_kommune_kodes(df2)
 
+    # Rename the 'value' column to 'inntekt' and 'inntektx' respectively
     kommune_int_aar = df1.rename(columns={"value": "inntekt"})
     kommune_int_fjor = df2.rename(columns={"value": "inntektx"})
 
+    # Merge the current year and previous year income data on 'kommune_nr'
     kommune_inntekt = pd.merge(
         kommune_int_aar, kommune_int_fjor, on="kommune_nr", how="inner"
     )
 
+    # Calculate the income delta
     kommune_inntekt["inntekt_delta"] = (
         kommune_inntekt["inntekt"] / kommune_inntekt["inntektx"]
     )
 
+    # Rename 'kommune_nr' to 'b_kommunenr'
     kommune_inntekt = kommune_inntekt.rename(columns={"kommune_nr": "b_kommunenr"})
 
+    # Keep only 'b_kommunenr' and 'inntekt_delta' columns
     kommune_inntekt = kommune_inntekt[["b_kommunenr", "inntekt_delta"]]
 
+    # Replace infinite values in 'inntekt_delta' with NaN
     kommune_inntekt["inntekt_delta"].replace([np.inf, -np.inf], np.nan, inplace=True)
 
+    # Calculate the mean value of 'inntekt_delta'
     mean_value = kommune_inntekt["inntekt_delta"].mean()
 
+    # Fill NaN values in 'inntekt_delta' with the mean value
     kommune_inntekt["inntekt_delta"].fillna(mean_value, inplace=True)
 
     return kommune_inntekt
+

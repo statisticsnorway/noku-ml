@@ -373,6 +373,7 @@ def translate_kommune_kodes(df):
 
 
 def translate_kommune_kodes_2(df):
+    
     merged_kommunes = {
         "0101": ["3001"],
         "0104": ["3002"],

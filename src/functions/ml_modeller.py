@@ -136,7 +136,18 @@ def hente_training_data():
     return training_data, imputatable_df, foretak_pub
 
 def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
+    """
+    Trains an XGBoost model for predicting new_oms values with an optional GridSearch for hyperparameter tuning.
 
+    Parameters:
+    training_df (pd.DataFrame): DataFrame containing the training data.
+    scaler (object): Scaler object for numerical features (e.g., StandardScaler, RobustScaler).
+    df_estimeres (pd.DataFrame): DataFrame containing the data to be imputed.
+    GridSearch (bool): Whether to perform GridSearch for hyperparameter tuning. Default is True.
+
+    Returns:
+    pd.DataFrame: DataFrame with predicted new_oms values.
+    """
     import numpy as np
     import xgboost as xgb
     from sklearn.model_selection import train_test_split, GridSearchCV
@@ -146,11 +157,14 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
     import matplotlib.pyplot as plt
     import shap
 
+    # Make copies of the input DataFrames
     df = training_df.copy()
     imputed_df = df_estimeres.copy()
+    
+    # Drop rows with NaN values in the target column
     df = df.dropna(subset=['new_oms'])
     
-    # Convert object types to category
+    # Convert specified columns to category type
     categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
@@ -203,7 +217,7 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
             'colsample_bytree': [0.8, 1.0]
         }
 
-        # Grid search with cross-validation
+        # Perform GridSearch with cross-validation
         grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3, verbose=1)
         grid_search.fit(X_train_transformed, y_train)
 
@@ -229,15 +243,13 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
 
     if len(negative_predictions) > 0:
         print("Number of negative predictions:", len(negative_predictions))
-#         print(negative_predictions)
-
-#         negative_df = X_test.iloc[negative_indices]
-#         negative_df["predicted_oms"] = y_pred[negative_indices]
     else:
         print("No negative predictions found.")
         
+    # Set negative predictions to zero
     y_pred = np.maximum(y_pred, 0)
 
+    # Calculate evaluation metrics
     mse = mean_squared_error(y_test, y_pred)
     r_squared = r2_score(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)  # Calculate Mean Absolute Error
@@ -303,18 +315,32 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
     # Dependence plot to show the effect of a single feature across the dataset
     shap.dependence_plot(verdi_index, shap_values, X_test_transformed, feature_names=feature_names)
 
+    # Impute the missing data
     imputed_X = imputed_df.drop(columns=["new_oms"])
     imputed_X_transformed = preprocessor.transform(imputed_X)
     imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
 
+    # Ensure no negative predictions
     imputed_df['predicted_oms'] = imputed_df['predicted_oms'].clip(lower=0)
     imputed_df['predicted_oms'] = imputed_df['predicted_oms'].astype(float)
     
     return imputed_df
 
 
-def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
 
+def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
+    """
+    Trains a K-Nearest Neighbors model for predicting new_oms values with an optional GridSearch for hyperparameter tuning.
+
+    Parameters:
+    training_df (pd.DataFrame): DataFrame containing the training data.
+    scaler (object): Scaler object for numerical features (e.g., StandardScaler, RobustScaler).
+    df_estimeres (pd.DataFrame): DataFrame containing the data to be imputed.
+    GridSearch (bool): Whether to perform GridSearch for hyperparameter tuning. Default is True.
+
+    Returns:
+    pd.DataFrame: DataFrame with predicted new_oms values.
+    """
     import numpy as np
     from sklearn.model_selection import train_test_split, GridSearchCV
     from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
@@ -323,9 +349,11 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     from sklearn.neighbors import KNeighborsRegressor
     import matplotlib.pyplot as plt
 
+    # Make copies of the input DataFrames
     df = training_df.copy()
     imputed_df = df_estimeres.copy()
 
+    # Columns to fill with 'missing' and 0 respectively
     columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     numeric_columns_to_fill = [
         "inntekt_delta_oms",
@@ -342,16 +370,20 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     df[columns_to_fill] = df[columns_to_fill].fillna('missing')
     imputed_df[columns_to_fill] = imputed_df[columns_to_fill].fillna('missing')
     
+    # Fill NaN values with 0 for the specified columns
     df[numeric_columns_to_fill] = df[numeric_columns_to_fill].fillna(0)
     imputed_df[numeric_columns_to_fill] = imputed_df[numeric_columns_to_fill].fillna(0)
 
+    # Convert specified columns to category type
     categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
 
+    # Define features and target
     X = df.drop(columns=["new_oms"])
     y = df["new_oms"]
 
+    # Define preprocessor
     categorical_features = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     numerical_features = [
         "inntekt_delta_oms",
@@ -371,8 +403,10 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
         ]
     )
 
+    # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+    # Fit the preprocessor and transform the training and testing data
     preprocessor.fit(X_train)
     X_train_transformed = preprocessor.transform(X_train)
     X_test_transformed = preprocessor.transform(X_test)
@@ -386,7 +420,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
             'n_neighbors': [2, 3, 5, 7]
         }
 
-        # Grid search with cross-validation
+        # Perform GridSearch with cross-validation
         grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3, verbose=1)
         grid_search.fit(X_train_transformed, y_train)
 
@@ -397,14 +431,15 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
         regressor = grid_search.best_estimator_
     else:
         # Define the model with default parameters
-        # best results so far n = 2
         regressor = KNeighborsRegressor(n_neighbors=2)
 
         # Train the model
         regressor.fit(X_train_transformed, y_train)
 
+    # Predict on test data
     y_pred = regressor.predict(X_test_transformed)
 
+    # Calculate metrics
     mse = mean_squared_error(y_test, y_pred)
     r_squared = r2_score(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
@@ -431,6 +466,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     plt.title("Residuals Plot")
     plt.show()
 
+    # Impute the missing data
     imputed_X = imputed_df.drop(columns=["new_oms"])
     imputed_X_transformed = preprocessor.transform(imputed_X)
     imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
@@ -440,56 +476,100 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
 
 
 
-def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres):
-    
+
+def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridSearch=True):
+    """
+    Trains a neural network model for predicting new_oms values with an optional GridSearch for hyperparameter tuning.
+
+    Parameters:
+    training_df (pd.DataFrame): DataFrame containing the training data.
+    scaler (object): Scaler object for numerical features (e.g., StandardScaler, RobustScaler).
+    epochs_number (int): Number of epochs for training the neural network.
+    batch_size (int): Batch size for training the neural network.
+    df_estimeres (pd.DataFrame): DataFrame containing the data to be imputed.
+    GridSearch (bool): Whether to perform GridSearch for hyperparameter tuning. Default is True.
+
+    Returns:
+    pd.DataFrame: DataFrame with predicted new_oms values.
+    """
     import pandas as pd
     import numpy as np
-    import xgboost as xgb
-    from sklearn.model_selection import train_test_split, learning_curve
-    from sklearn.metrics import accuracy_score, classification_report
+    from sklearn.model_selection import train_test_split, GridSearchCV
+    from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error, median_absolute_error
     from sklearn.preprocessing import OneHotEncoder
     from sklearn.compose import ColumnTransformer
-    from sklearn.pipeline import Pipeline
-    from sklearn.impute import SimpleImputer
+    from scikeras.wrappers import KerasRegressor
+    import tensorflow as tf
     import matplotlib.pyplot as plt
-    
 
-    def build_nn_model(input_shape):
+    def build_nn_model(input_shape, learning_rate=0.001, dropout_rate=0.5, neurons_layer1=64, neurons_layer2=32, activation='relu', optimizer='adam'):
+        """
+        Builds and compiles a neural network model.
+
+        Parameters:
+        input_shape (int): Number of input features.
+        learning_rate (float): Learning rate for the optimizer.
+        dropout_rate (float): Dropout rate for regularization.
+        neurons_layer1 (int): Number of neurons in the first layer.
+        neurons_layer2 (int): Number of neurons in the second layer.
+        activation (str): Activation function to use.
+        optimizer (str): Optimizer to use.
+
+        Returns:
+        tf.keras.Model: Compiled neural network model.
+        """
         model = tf.keras.models.Sequential()
-        model.add(tf.keras.layers.Dense(64, input_shape=(input_shape,), activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)))
-        model.add(tf.keras.layers.Dropout(0.5))
-        model.add(tf.keras.layers.Dense(32, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)))
-        model.add(tf.keras.layers.Dropout(0.5))
+        model.add(tf.keras.layers.Dense(neurons_layer1, input_shape=(input_shape,), activation=activation, kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+        model.add(tf.keras.layers.Dropout(dropout_rate))
+        model.add(tf.keras.layers.Dense(neurons_layer2, activation=activation, kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+        model.add(tf.keras.layers.Dropout(dropout_rate))
         model.add(tf.keras.layers.Dense(1, activation='linear'))
-        model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mse'])
+        
+        if optimizer == 'adam':
+            opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+        elif optimizer == 'sgd':
+            opt = tf.keras.optimizers.SGD(learning_rate=learning_rate)
+        elif optimizer == 'rmsprop':
+            opt = tf.keras.optimizers.RMSprop(learning_rate=learning_rate)
+        else:
+            opt = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+        
+        model.compile(optimizer=opt, loss='mean_squared_error', metrics=['mse'])
         return model
 
+    # Prepare the data
     df = training_df.copy()
     imputed_df = df_estimeres.copy()
- 
+
+    # Fill NaN values in specified columns
     columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
-    numeric_columns_to_fill = ["inntekt_delta_oms",
+    numeric_columns_to_fill = [
+        "inntekt_delta_oms",
         "emp_delta_oms",
         "befolkning_delta_oms",
         "inflation_rate_oms",
         "gjeldende_bdr_syss",
         "new_oms_trendForecast",
         'oms_syssmean_basedOn_naring',
-        'oms_syssmean_basedOn_naring_kommune']
+        'oms_syssmean_basedOn_naring_kommune'
+    ]
 
-    # Fill NaN values with 'missing' for the specified columns
     df[columns_to_fill] = df[columns_to_fill].fillna('missing')
     imputed_df[columns_to_fill] = imputed_df[columns_to_fill].fillna('missing')
-    
     df[numeric_columns_to_fill] = df[numeric_columns_to_fill].fillna(0)
     imputed_df[numeric_columns_to_fill] = imputed_df[numeric_columns_to_fill].fillna(0)
 
+    # Convert categorical columns to category type
     categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
 
-    categorical_features = categorical_columns
+    # Define features and target
+    X = df.drop(columns=["new_oms"])
+    y = df["new_oms"]
 
+    # Define preprocessor
+    categorical_features = categorical_columns
     numerical_features = [
         "inntekt_delta_oms",
         "emp_delta_oms",
@@ -501,11 +581,6 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres):
         'oms_syssmean_basedOn_naring_kommune'
     ]
 
-    X = df.drop(columns=["new_oms"])
-    y = df["new_oms"]
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
     preprocessor = ColumnTransformer(
         transformers=[
             ("num", scaler, numerical_features),
@@ -513,57 +588,59 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres):
         ]
     )
 
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Transform the data
     X_train_transformed = preprocessor.fit_transform(X_train)
     X_test_transformed = preprocessor.transform(X_test)
     input_shape = X_train_transformed.shape[1]
 
-    model = build_nn_model(input_shape)
-    
-    # Define learning rate scheduler callback
-    def scheduler(epoch, lr):
-        if epoch < 60:
-            return lr
-        else:
-            return float(lr * tf.math.exp(-0.1))
-    
-    lr_scheduler = tf.keras.callbacks.LearningRateScheduler(scheduler)
+    # Wrap the model with KerasRegressor
+    nn_model = KerasRegressor(build_fn=build_nn_model, input_shape=input_shape, epochs=epochs_number, batch_size=batch_size, verbose=0)
+
+    # Define early stopping
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
-    history = model.fit(
-        X_train_transformed, y_train,
-        validation_split=0.2,
-        epochs=epochs_number,
-        batch_size=batch_size,
-        callbacks=[early_stopping, lr_scheduler],
-        verbose=1
-    )
+    if GridSearch:
+        # Perform Grid Search for hyperparameter tuning
+        param_grid = {
+            'epochs': [100, 200, 300, 400],
+            'batch_size': [10, 32, 64, 128],
+            'learning_rate': [0.001, 0.01, 0.1],
+            'dropout_rate': [0.3, 0.5, 0.7],
+            'neurons_layer1': [32, 64, 128],
+            'neurons_layer2': [16, 32, 64],
+            'activation': ['relu', 'tanh'],
+            'optimizer': ['adam', 'sgd', 'rmsprop']
+        }
+        grid_search = GridSearchCV(estimator=nn_model, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3, verbose=1)
+        grid_search.fit(X_train_transformed, y_train, callbacks=[early_stopping])
+        print("Best parameters found by GridSearch:", grid_search.best_params_)
+        nn_model = grid_search.best_estimator_
+    else:
+        # Train the model with provided parameters
+        nn_model.fit(X_train_transformed, y_train, callbacks=[early_stopping])
 
-    history_dict = history.history
-    plt.plot(history_dict['loss'], label='train loss')
-    plt.plot(history_dict['val_loss'], label='validation loss')
-    plt.legend()
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.title('Training vs. Validation Loss')
-    plt.show()
-
-    y_pred = model.predict(X_test_transformed).flatten()  # Ensure y_pred is 1-dimensional
+    # Predict on test data
+    y_pred = nn_model.predict(X_test_transformed).flatten()  # Ensure y_pred is 1-dimensional
 
     # Set negative predictions to zero
     y_pred = np.maximum(y_pred, 0)
 
+    # Calculate metrics
     mse = mean_squared_error(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
     medae = median_absolute_error(y_test, y_pred)
     r_squared = r2_score(y_test, y_pred)
     rmse = np.sqrt(mse)
-    mean_y_test = np.mean(y_test)
 
     print(f"Mean Squared Error (MSE): {mse}")
     print(f"Mean Absolute Error (MAE): {mae}")
     print(f"Median Absolute Error (MedAE): {medae}")
     print(f"R-squared score: {r_squared}")
 
+    # Plot Predicted vs. Actual Values
     plt.figure(figsize=(10, 5))
     plt.scatter(y_test, y_pred, alpha=0.3)
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--", lw=2)
@@ -572,6 +649,7 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres):
     plt.title("Predicted vs. Actual Values")
     plt.show()
 
+    # Plot Residuals
     residuals = y_test - y_pred
     plt.figure(figsize=(10, 5))
     plt.scatter(y_test, residuals, alpha=0.3)
@@ -581,15 +659,26 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres):
     plt.title("Residuals Plot")
     plt.show()
 
-    # imputed_X = imputed_df.drop(columns=["new_oms"])
-    # imputed_X_transformed = preprocessor.transform(imputed_X)
-    # imputed_df["predicted_oms"] = model_pipeline.named_steps['nn_model'].predict(imputed_X_transformed)
+    # Impute the missing data
+    imputed_X = imputed_df.drop(columns=["new_oms"])
+    imputed_X_transformed = preprocessor.transform(imputed_X)
+    imputed_df["predicted_oms"] = nn_model.predict(imputed_X_transformed)
     
     return imputed_df
 
 
+
+
 def xgboost_n3_klass(df):
-    
+    """
+    Trains an XGBoost classifier to predict 'n3' categories with preprocessing for numerical and categorical data.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame containing the data with 'n3' as the target variable.
+
+    Returns:
+    None
+    """
     import pandas as pd
     import numpy as np
     import xgboost as xgb
@@ -658,17 +747,66 @@ def xgboost_n3_klass(df):
     n3_mapping = {idx: label for idx, label in enumerate(pd.unique(df['n3']))}
 
     # Safely convert predictions and true values back to original labels using the mapping
-    # Provide 'Unknown' for any label not found in the mapping
     y_pred_labels = [n3_mapping.get(label, 'Unknown') for label in y_pred]
     y_test_labels = [n3_mapping.get(label, 'Unknown') for label in y_test]
 
     # Print accuracy and classification report using the original 'n3' labels
     print(f"Accuracy: {accuracy_score(y_test, y_pred)}")
     print(classification_report(y_test_labels, y_pred_labels))
+    
+    # Plot learning curve
+    def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None, n_jobs=None, train_sizes=np.linspace(.1, 1.0, 5)):
+        """
+        Generate a simple plot of the test and training learning curve.
+
+        Parameters:
+        estimator: object type that implements the "fit" and "predict" methods
+        title: string, Title for the chart
+        X: array-like, shape (n_samples, n_features), Training vector
+        y: array-like, shape (n_samples) or (n_samples, n_features), Target relative to X for classification or regression
+        ylim: tuple, shape (ymin, ymax), optional, Defines minimum and maximum y-values plotted
+        cv: int, cross-validation generator or an iterable, optional, Determines the cross-validation splitting strategy
+        n_jobs: int or None, optional, Number of jobs to run in parallel
+        train_sizes: array-like, shape (n_ticks,), Relative or absolute numbers of training examples that will be used to generate the learning curve
+
+        Returns:
+        plt: Matplotlib plot object
+        """
+        plt.figure()
+        plt.title(title)
+        if ylim is not None:
+            plt.ylim(*ylim)
+        plt.xlabel("Training examples")
+        plt.ylabel("Score")
+        train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes)
+        train_scores_mean = np.mean(train_scores, axis=1)
+        train_scores_std = np.std(train_scores, axis=1)
+        test_scores_mean = np.mean(test_scores, axis=1)
+        test_scores_std = np.std(test_scores, axis=1)
+        plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std, alpha=0.1, color="r")
+        plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1, color="g")
+        plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
+        plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
+        plt.legend(loc="best")
+        return plt
+
+    plot_learning_curve(clf, "Learning Curve for XGBoost Classifier", X_train, y_train, cv=5)
+    plt.show()
+
+
 
 
 def knn_n3_klass(df):
-    
+    """
+    Trains a K-Nearest Neighbors (KNN) classifier to predict 'n3' categories with preprocessing 
+    for numerical and categorical data.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame containing the data with 'n3' as the target variable.
+
+    Returns:
+    None
+    """
     import pandas as pd
     import numpy as np
     from sklearn.model_selection import train_test_split, learning_curve
@@ -736,6 +874,22 @@ def knn_n3_klass(df):
 
     # Plot learning curve
     def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None, n_jobs=None, train_sizes=np.linspace(.1, 1.0, 5)):
+        """
+        Generate a simple plot of the test and training learning curve.
+
+        Parameters:
+        estimator: object type that implements the "fit" and "predict" methods
+        title: string, Title for the chart
+        X: array-like, shape (n_samples, n_features), Training vector
+        y: array-like, shape (n_samples) or (n_samples, n_features), Target relative to X for classification or regression
+        ylim: tuple, shape (ymin, ymax), optional, Defines minimum and maximum y-values plotted
+        cv: int, cross-validation generator or an iterable, optional, Determines the cross-validation splitting strategy
+        n_jobs: int or None, optional, Number of jobs to run in parallel
+        train_sizes: array-like, shape (n_ticks,), Relative or absolute numbers of training examples that will be used to generate the learning curve
+
+        Returns:
+        plt: Matplotlib plot object
+        """
         plt.figure()
         plt.title(title)
         if ylim is not None:
@@ -744,9 +898,10 @@ def knn_n3_klass(df):
         plt.ylabel("Score")
         train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes)
         train_scores_mean = np.mean(train_scores, axis=1)
-        test_scores_std = np.std(train_scores, axis=1)
+        train_scores_std = np.std(train_scores, axis=1)
         test_scores_mean = np.mean(test_scores, axis=1)
-        plt.fill_between(train_sizes, train_scores_mean - test_scores_std, train_scores_mean + test_scores_std, alpha=0.1, color="r")
+        test_scores_std = np.std(test_scores, axis=1)
+        plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std, alpha=0.1, color="r")
         plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std, alpha=0.1, color="g")
         plt.plot(train_sizes, train_scores_mean, 'o-', color="r", label="Training score")
         plt.plot(train_sizes, test_scores_mean, 'o-', color="g", label="Cross-validation score")
@@ -755,6 +910,7 @@ def knn_n3_klass(df):
 
     plot_learning_curve(clf, "Learning Curve for KNN Classifier", X_train, y_train, cv=5)
     plt.show()
+
     
     
 def test_results(df, aar):
@@ -828,3 +984,35 @@ def test_results(df, aar):
     r2 = r2_score(omsetning, oms)
     print(f'R² Score for reg_type 02: {r2}')
 
+
+def fetch_foretak_data(aar):
+    
+    # Fetch paths to all Parquet files for the specified year related to foretak (enterprises)
+    fil_path = [
+        f for f in fs.glob(
+            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{aar}/statistikkfil_foretak_pub.parquet"
+        ) if f.endswith(".parquet")
+    ]
+
+    # Use the ParquetDataset to read multiple Parquet files into a single Arrow Table
+    dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+    table = dataset.read()
+
+    # Convert the Arrow Table into a Pandas DataFrame
+    foretak_pub = table.to_pandas()
+
+    # Create a new column 'n3' extracting the first four characters from 'naring_f' column
+    # Create a new column 'n2' extracting the first two characters from 'naring_f' column
+    foretak_pub['n3'] = foretak_pub['naring_f'].str[:4]
+    foretak_pub['n2'] = foretak_pub['naring_f'].str[:2]
+
+    # Filter data where 'n2' indicates specific industry codes relevant to the analysis
+    foretak_varendel = foretak_pub[(foretak_pub['n2'] == '45') | (foretak_pub['n2'] == '46') | (foretak_pub['n2'] == '47')]
+
+    # Select only the relevant columns for further processing
+    foretak_varendel = foretak_varendel[['orgnr_foretak', 'naring_f', 'n2', 'n3', 'bearbeidingsverdi',
+                                         'produktinnsats', 'produksjonsverdi', 'omsetning', 
+                                         'nopost_driftsresultat', 'nopost_driftskostnader',
+                                         'nopost_driftsinntekter', 'sysselsetting_syss']]
+    
+    return foretak_pub, foretak_varendel
