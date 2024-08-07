@@ -47,33 +47,6 @@ warnings.filterwarnings("ignore")
 
 
 def gather_visualisation_data(year):
-    # Fetch paths to all Parquet files for the specified year related to foretak (enterprises)
-#     fil_path = [
-#         f for f in fs.glob(
-#             f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{year}/statistikkfil_foretak_pub.parquet"
-#         ) if f.endswith(".parquet")
-#     ]
-
-#     # Use the ParquetDataset to read multiple Parquet files into a single Arrow Table
-#     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-#     table = dataset.read()
-
-#     # Convert the Arrow Table into a Pandas DataFrame
-#     foretak_pub = table.to_pandas()
-
-    # Create a new column 'n3' extracting the first four characters from 'naring_f' column
-    # Create a new column 'n2' extracting the first two characters from 'naring_f' column
-    # foretak_pub['n3'] = foretak_pub['naring_f'].str[:4]
-    # foretak_pub['n2'] = foretak_pub['naring_f'].str[:2]
-
-    # Filter data where 'n2' indicates specific industry codes relevant to the analysis
-#     foretak_varendel = foretak_pub[(foretak_pub['n2'] == '45') | (foretak_pub['n2'] == '46') | (foretak_pub['n2'] == '47')]
-
-#     # Select only the relevant columns for further processing
-#     foretak_varendel = foretak_varendel[['orgnr_foretak', 'naring_f', 'n2', 'n3', 'bearbeidingsverdi',
-#                                          'produktinnsats', 'produksjonsverdi', 'omsetning', 
-#                                          'nopost_driftsresultat', 'nopost_driftskostnader',
-#                                          'nopost_driftsinntekter', 'sysselsetting_syss']]
 
     # Fetch and process time series data similar to the steps above
     fil_path = [f for f in fs.glob(f"gs://ssb-prod-noeku-data-produkt/temp/timeseries_knn.parquet") if f.endswith(".parquet")]
@@ -149,54 +122,7 @@ def plots_time(df):
              chart_type=chart_type_selector)
 
 
-
 #timeseries_knn_agg
-# def plot_all_time(df):
-
-#     def plot_all_n3(variable, chart_type):
-#         if chart_type == 'Line Chart':
-#             fig = px.line(df, x='year', y=variable, color='n3', markers=True,
-#                           title=f'Trend of {variable} over Years for all n3 categories')
-#         elif chart_type == 'Bar Chart':
-#             fig = px.bar(df, x='year', y=variable, color='n3',
-#                          title=f'Trend of {variable} over Years for all n3 categories')
-#         elif chart_type == 'Area Chart':
-#             wide_df = df.pivot_table(index='year', columns='n3', values=variable, aggfunc='sum').fillna(0)
-#             fig = px.area(wide_df, labels={'value': variable, 'year': 'Year'},
-#                           title=f'Trend of {variable} over Years for all n3 categories')
-
-#         # Adjust the layout
-#         fig.update_layout(
-#             xaxis_title='Year',
-#             yaxis_title=variable,
-#             template='plotly_white',
-#             height=800,  # Increased height to accommodate legend
-#             width=1000,  # Increased width to accommodate legend
-#             legend_title='n3',
-#             legend=dict(
-#                 x=1,  # Adjust the x position of the legend (1 is at the right end of the plot area)
-#                 xanchor='auto',  # Anchor point for the legend x position
-#                 y=1,  # Adjust the y position of the legend (1 is at the top of the plot area)
-#                 yanchor='auto',  # Anchor point for the legend y position
-#                 tracegroupgap=0,
-#                 title_font=dict(size=14),
-#                 font=dict(size=12, color="black"),
-#                 bgcolor="LightSteelBlue",
-#                 bordercolor="Black",
-#                 borderwidth=1
-#             )
-#         )
-
-#         # Optionally add an orientation to the legend if needed
-#         # fig.update_layout(legend_orientation="h")
-
-#         fig.show()
-
-#     chart_type_selector = Dropdown(options=['Line Chart', 'Bar Chart', 'Area Chart'], value='Line Chart', description='Chart Type:')
-#     interact(plot_all_n3, 
-#              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
-#              chart_type=chart_type_selector)
-
 def plot_all_time(df):
 
     def plot_all_n3(variable, chart_type):
@@ -207,8 +133,9 @@ def plot_all_time(df):
             fig = px.bar(df, x='year', y=variable, color='n3',
                          title=f'Trend of {variable} over Years for all n3 categories')
         elif chart_type == 'Area Chart':
-            wide_df = df.pivot(index='year', columns='n3', values=variable).fillna(0)
-            fig = px.area(wide_df, title=f'Trend of {variable} over Years for all n3 categories')
+            wide_df = df.pivot_table(index='year', columns='n3', values=variable, aggfunc='sum').fillna(0)
+            fig = px.area(wide_df, labels={'value': variable, 'year': 'Year'},
+                          title=f'Trend of {variable} over Years for all n3 categories')
 
         # Adjust the layout
         fig.update_layout(
@@ -241,7 +168,6 @@ def plot_all_time(df):
     interact(plot_all_n3, 
              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
              chart_type=chart_type_selector)
-
 
 
 #timeseries_knn_agg
@@ -328,14 +254,21 @@ def heatmap(df):
     # Interactive widget setup
     interact(plot_heatmap, n2=n2_selector, variable=variable_selector)
 
-#timeseries_knn_kommune
 def thematic_kommune(df):
+    
+    # Convert the 'year' column to int
+    df['year'] = pd.to_numeric(df['year'], errors='coerce').fillna(0).astype(int)
+    
     def update_map(variable, naring, year):
+        
+        # Filter the main DataFrame for the selected year and possibly other conditions
+        filtered_data = df[df['year'] == year]
+        
         # Filter the DataFrame for the selected year and other conditions
-        kommuner = kommune.kommune(variable, naring, year, df)
+        kommuner = kommune.kommune(variable, naring, year, filtered_data)
         # Create and display the thematic map
         m = sg.ThematicMap(kommuner, column=variable, size=15)
-        m.title = "Valgte variable i kommunene"
+        m.title = "Selected Business Metric by Kommune"
         m.plot()
 
     # Define the interactive map function
@@ -344,20 +277,28 @@ def thematic_kommune(df):
         update_map(variable, naring, year)
 
     # Create dropdown widgets
-    year_dropdown = widgets.Dropdown(options=sorted(df['year'].unique()), description='Year:')
-    naring_dropdown = widgets.Dropdown(options=sorted(df['n3'].unique()), description='naring:')
+    year_dropdown = widgets.Dropdown(
+        options=sorted(df['year'].unique()), 
+        description='Year:'
+    )
+    naring_dropdown = widgets.Dropdown(
+        options=sorted(df['n3'].unique()), 
+        description='Naring:'
+    )
     column_dropdown = widgets.Dropdown(
         options=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
         description='Variable:'
     )
 
-    # Use `interact` to bind the widgets and the function
-    interact_widget = widgets.interact(interactive_map, variable=column_dropdown, naring=naring_dropdown, year=year_dropdown)
-    display(interact_widget)
+    # Interactive widget to control the map
+    @widgets.interact(variable=column_dropdown, naring=naring_dropdown, year=year_dropdown)
+    def interactive_map(variable, naring, year):
+        clear_output(wait=True)
+        update_map(variable, naring, year)
 
-        
+    display(interactive_map)
 
-        
+              
 # timeseries_knn_kommune
 def animated_thematic_kommune(df):
 
@@ -371,8 +312,8 @@ def animated_thematic_kommune(df):
         kommuner = kommune.kommune(variable, naring, year, filtered_data)
 
         # Create a new map instance with updated data
-        m = sg.ThematicMap(kommuner, column=variable, size=8)
-        m.title = "Valgte variable i kommunene"
+        m = sg.ThematicMap(kommuner, column=variable, size=15)
+        m.title = "Selected Business Metric by Kommune Through the Years"
         m.plot()
 
     # Widgets
@@ -765,59 +706,6 @@ def bubble_plot(df):
     
 
 # timeseries_knn_agg
-# def animated_barchart(df):
-
-#     # Function to compute and sort data based on the ranks
-#     def prepare_data(df, value_column):
-#         # Compute ranks within each year group
-#         df['rank'] = df.groupby('year')[value_column].rank("dense", ascending=False)
-#         # Sort by year and rank for correct plotting order
-#         return df.sort_values(by=['year', 'rank'], ascending=[True, True])
-
-#     # Create a color map for each unique 'n3' value
-#     color_map = {n3: f"#{hash(n3) & 0xFFFFFF:06x}" for n3 in df['n3'].unique()}
-
-#     # Dropdown widget for selecting the numerical variable
-#     dropdown = widgets.Dropdown(
-#         options=[col for col in df.columns if col not in ['year', 'n3']],
-#         value='oms',  # Default selection
-#         description='Variable:',
-#         disabled=False,
-#     )
-
-#     # Initial plotting function
-#     def initial_plot(value_column):
-#         ranked_df = prepare_data(df.copy(), value_column)
-#         fig = px.bar(
-#             ranked_df,
-#             x=value_column,
-#             y='n3',  # Use 'n3' for y-axis
-#             animation_frame='year',
-#             range_x=[0, ranked_df[value_column].max() + 10],
-#             color='n3',
-#             color_discrete_map=color_map,
-#             orientation='h',
-#             height=700,  # Increased height for better visibility
-#             width=1200   # Increased width
-#         )
-#         fig.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 1000
-#         fig.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 300
-#         fig.update_yaxes(categoryorder='total ascending')  # Ensure y-axis categories are sorted by total ascending
-#         fig.show()
-#         return fig
-
-#     # Update function for the dropdown
-#     def update_graph(change):
-#         fig = initial_plot(change.new)
-#         fig.show()
-
-#     # Observe changes in the dropdown
-#     fig = initial_plot(dropdown.value)
-#     dropdown.observe(update_graph, names='value')
-
-#     # Display the dropdown
-#     display(dropdown)
-
 import plotly.express as px
 from IPython.display import display
 import ipywidgets as widgets

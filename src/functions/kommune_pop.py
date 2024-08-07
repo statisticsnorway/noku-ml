@@ -17,8 +17,8 @@ def fetch_population_data(year):
     import pyjstat
     from pyjstat import pyjstat
 
-    # year = str(year)
-
+    # query ssb API
+    
     POST_URL = "https://data.ssb.no/api/v0/no/table/11342/"
     bef_kom = {
         "query": [
@@ -1001,58 +1001,62 @@ def fetch_population_data(year):
 
 
 def befolkning_behandling(year, fjor):
-
+    
     import sys
-
     import numpy as np
-
     sys.path.append("../functions")
-
     import kommune_translate
 
+    # Convert year and previous year to integers
     year_int = int(year)
     fjor_int = int(fjor)
 
+    # Fetch population data for the current year and previous year
     df1 = fetch_population_data(year)
     df2 = fetch_population_data(fjor)
 
+    # Filter out rows where 'value' is 0
     df1 = df1[df1["value"] != 0]
     df2 = df2[df2["value"] != 0]
 
+    # Add 'year' column to each dataframe
     df1["year"] = year_int
     df2["year"] = fjor_int
 
-    # df1 = translate_kommune_kodes(df1, year)
-    # df2 = translate_kommune_kodes(df2, fjor)
-
-    # Check if the year is less than 2020 before translating
+    # Translate municipality codes if the year is less than 2020
     if df1["year"].iloc[0] < 2020:
         df1 = kommune_translate.translate_kommune_kodes(df1)
     if df2["year"].iloc[0] < 2020:
         df2 = kommune_translate.translate_kommune_kodes(df2)
 
+    # Rename the 'value' column to 'befolkning' and 'befolkningx' respectively
     kommune_pop_aar = df1.rename(columns={"value": "befolkning"})
     kommune_pop_fjor = df2.rename(columns={"value": "befolkningx"})
 
-    # kommune_pop_aar.drop(["år", "region"], axis=1, inplace=True)
-    # kommune_pop_fjor.drop(["år", "region"], axis=1, inplace=True)
-
+    # Merge the current year and previous year population data on 'kommune_nr'
     kommune_befolk = pd.merge(
         kommune_pop_aar, kommune_pop_fjor, on="kommune_nr", how="inner"
     )
 
+    # Calculate the population delta
     kommune_befolk["befolkning_delta"] = (
         kommune_befolk["befolkning"] / kommune_befolk["befolkningx"]
     )
 
+    # Rename 'kommune_nr' to 'b_kommunenr'
     kommune_befolk = kommune_befolk.rename(columns={"kommune_nr": "b_kommunenr"})
 
+    # Keep only 'b_kommunenr' and 'befolkning_delta' columns
     kommune_befolk = kommune_befolk[["b_kommunenr", "befolkning_delta"]]
 
+    # Replace infinite values in 'befolkning_delta' with NaN
     kommune_befolk["befolkning_delta"].replace([np.inf, -np.inf], np.nan, inplace=True)
 
+    # Calculate the mean value of 'befolkning_delta'
     mean_value = kommune_befolk["befolkning_delta"].mean()
 
+    # Fill NaN values in 'befolkning_delta' with the mean value
     kommune_befolk["befolkning_delta"].fillna(mean_value, inplace=True)
 
     return kommune_befolk
+
