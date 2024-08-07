@@ -121,43 +121,6 @@ def plots_time(df):
              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'], 
              chart_type=chart_type_selector)
 
-# def plots_time(df):
-
-#     def plot_variable(n3, variable, chart_type):
-#         filtered_df = df[df['n3'] == n3]
-
-#         if chart_type == 'Line Chart':
-#             fig = px.line(filtered_df, x='year', y=variable, markers=True, title=f'{variable} over Years for {n3}')
-            
-#             # Add a glow effect
-#             fig.add_scatter(x=filtered_df['year'], y=filtered_df[variable],
-#                             mode='lines', line=dict(width=12, color='rgba(255, 0, 0, 0.2)'), name='Glow')
-#             fig.add_scatter(x=filtered_df['year'], y=filtered_df[variable],
-#                             mode='lines', line=dict(width=8, color='rgba(255, 0, 0, 0.4)'), name='Glow')
-#             fig.add_scatter(x=filtered_df['year'], y=filtered_df[variable],
-#                             mode='lines', line=dict(width=4, color='rgba(255, 0, 0, 0.6)'), name='Glow')
-
-#         elif chart_type == 'Bar Chart':
-#             fig = px.bar(filtered_df, x='year', y=variable, title=f'{variable} over Years for {n3}')
-#         elif chart_type == 'Scatter Plot':
-#             fig = px.scatter(filtered_df, x='year', y=variable, title=f'{variable} over Years for {n3}')
-
-#         fig.update_layout(xaxis_title='Year',
-#                           yaxis_title=variable,
-#                           template='plotly_white',
-#                           xaxis=dict(showgrid=True),
-#                           yaxis=dict(showgrid=True))
-#         fig.show()
-
-#     # Dropdown menu for the type of chart
-#     chart_type_selector = Dropdown(options=['Line Chart', 'Bar Chart', 'Scatter Plot'], value='Line Chart', description='Chart Type:')
-
-#     # Interactive widget setup
-#     interact(plot_variable, 
-#              n3=sorted(df['n3'].unique()), 
-#              variable=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'], 
-#              chart_type=chart_type_selector)
-
 
 #timeseries_knn_agg
 def plot_all_time(df):
@@ -291,14 +254,21 @@ def heatmap(df):
     # Interactive widget setup
     interact(plot_heatmap, n2=n2_selector, variable=variable_selector)
 
-#timeseries_knn_kommune
 def thematic_kommune(df):
+    
+    # Convert the 'year' column to int
+    df['year'] = pd.to_numeric(df['year'], errors='coerce').fillna(0).astype(int)
+    
     def update_map(variable, naring, year):
+        
+        # Filter the main DataFrame for the selected year and possibly other conditions
+        filtered_data = df[df['year'] == year]
+        
         # Filter the DataFrame for the selected year and other conditions
-        kommuner = kommune.kommune(variable, naring, year, df)
+        kommuner = kommune.kommune(variable, naring, year, filtered_data)
         # Create and display the thematic map
         m = sg.ThematicMap(kommuner, column=variable, size=15)
-        m.title = "Valgte variable i kommunene"
+        m.title = "Selected Business Metric by Kommune"
         m.plot()
 
     # Define the interactive map function
@@ -307,20 +277,28 @@ def thematic_kommune(df):
         update_map(variable, naring, year)
 
     # Create dropdown widgets
-    year_dropdown = widgets.Dropdown(options=sorted(df['year'].unique()), description='Year:')
-    naring_dropdown = widgets.Dropdown(options=sorted(df['n3'].unique()), description='naring:')
+    year_dropdown = widgets.Dropdown(
+        options=sorted(df['year'].unique()), 
+        description='Year:'
+    )
+    naring_dropdown = widgets.Dropdown(
+        options=sorted(df['n3'].unique()), 
+        description='Naring:'
+    )
     column_dropdown = widgets.Dropdown(
         options=['oms', 'forbruk', 'salgsint', 'drkost', 'lonn', 'syss', 'resultat', 'lonn_pr_syss', 'oms_pr_syss'],
         description='Variable:'
     )
 
-    # Use `interact` to bind the widgets and the function
-    interact_widget = widgets.interact(interactive_map, variable=column_dropdown, naring=naring_dropdown, year=year_dropdown)
-    display(interact_widget)
+    # Interactive widget to control the map
+    @widgets.interact(variable=column_dropdown, naring=naring_dropdown, year=year_dropdown)
+    def interactive_map(variable, naring, year):
+        clear_output(wait=True)
+        update_map(variable, naring, year)
 
-        
+    display(interactive_map)
 
-        
+              
 # timeseries_knn_kommune
 def animated_thematic_kommune(df):
 
@@ -334,8 +312,8 @@ def animated_thematic_kommune(df):
         kommuner = kommune.kommune(variable, naring, year, filtered_data)
 
         # Create a new map instance with updated data
-        m = sg.ThematicMap(kommuner, column=variable, size=8)
-        m.title = "Valgte variable i kommunene"
+        m = sg.ThematicMap(kommuner, column=variable, size=15)
+        m.title = "Selected Business Metric by Kommune Through the Years"
         m.plot()
 
     # Widgets
@@ -728,59 +706,6 @@ def bubble_plot(df):
     
 
 # timeseries_knn_agg
-# def animated_barchart(df):
-
-#     # Function to compute and sort data based on the ranks
-#     def prepare_data(df, value_column):
-#         # Compute ranks within each year group
-#         df['rank'] = df.groupby('year')[value_column].rank("dense", ascending=False)
-#         # Sort by year and rank for correct plotting order
-#         return df.sort_values(by=['year', 'rank'], ascending=[True, True])
-
-#     # Create a color map for each unique 'n3' value
-#     color_map = {n3: f"#{hash(n3) & 0xFFFFFF:06x}" for n3 in df['n3'].unique()}
-
-#     # Dropdown widget for selecting the numerical variable
-#     dropdown = widgets.Dropdown(
-#         options=[col for col in df.columns if col not in ['year', 'n3']],
-#         value='oms',  # Default selection
-#         description='Variable:',
-#         disabled=False,
-#     )
-
-#     # Initial plotting function
-#     def initial_plot(value_column):
-#         ranked_df = prepare_data(df.copy(), value_column)
-#         fig = px.bar(
-#             ranked_df,
-#             x=value_column,
-#             y='n3',  # Use 'n3' for y-axis
-#             animation_frame='year',
-#             range_x=[0, ranked_df[value_column].max() + 10],
-#             color='n3',
-#             color_discrete_map=color_map,
-#             orientation='h',
-#             height=700,  # Increased height for better visibility
-#             width=1200   # Increased width
-#         )
-#         fig.layout.updatemenus[0].buttons[0].args[1]['frame']['duration'] = 1000
-#         fig.layout.updatemenus[0].buttons[0].args[1]['transition']['duration'] = 300
-#         fig.update_yaxes(categoryorder='total ascending')  # Ensure y-axis categories are sorted by total ascending
-#         fig.show()
-#         return fig
-
-#     # Update function for the dropdown
-#     def update_graph(change):
-#         fig = initial_plot(change.new)
-#         fig.show()
-
-#     # Observe changes in the dropdown
-#     fig = initial_plot(dropdown.value)
-#     dropdown.observe(update_graph, names='value')
-
-#     # Display the dropdown
-#     display(dropdown)
-
 import plotly.express as px
 from IPython.display import display
 import ipywidgets as widgets
