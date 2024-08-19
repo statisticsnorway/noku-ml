@@ -1,4 +1,4 @@
-# biz_stats_ml
+# noku_ml
 Program that produces retail/wholesale trade statistics using machine learning + visualisations 
 
 The main problem being solved, is inaccuarte/low quality responses being delivered by respondents to a survey - often with very material consequences to the final production. This normally takes a team of statisticians an entire year to correct (sometimes results in having to recontact the responders) - I am to solve this task using machine learning and other statistical measures. 
