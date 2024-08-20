@@ -477,7 +477,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
 
 
 
-def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridSearch=True):
+def nn_model_1(training_df, scaler, epochs_number, batch_size, df_estimeres, GridSearch=True):
     """
     Trains a neural network model for predicting new_oms values with an optional GridSearch for hyperparameter tuning.
 
@@ -518,6 +518,7 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridS
         Returns:
         tf.keras.Model: Compiled neural network model.
         """
+        
         model = tf.keras.models.Sequential()
         model.add(tf.keras.layers.Dense(neurons_layer1, input_shape=(input_shape,), activation=activation, kernel_regularizer=tf.keras.regularizers.l2(0.01)))
         model.add(tf.keras.layers.Dropout(dropout_rate))
@@ -597,7 +598,7 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridS
     input_shape = X_train_transformed.shape[1]
 
     # Wrap the model with KerasRegressor
-    nn_model = KerasRegressor(build_fn=build_nn_model, input_shape=input_shape, epochs=epochs_number, batch_size=batch_size, verbose=0)
+    nn_model = KerasRegressor(build_fn=build_nn_model, input_shape=input_shape, epochs=epochs_number, batch_size=batch_size, verbose=1)
 
     # Define early stopping
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
@@ -620,7 +621,7 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridS
         nn_model = grid_search.best_estimator_
     else:
         # Train the model with provided parameters
-        nn_model.fit(X_train_transformed, y_train, callbacks=[early_stopping])
+        history = nn_model.fit(X_train_transformed, y_train, epochs=epochs_number, batch_size=batch_size, validation_split=0.2, callbacks=[early_stopping])
 
     # Predict on test data
     y_pred = nn_model.predict(X_test_transformed).flatten()  # Ensure y_pred is 1-dimensional
@@ -639,6 +640,17 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridS
     print(f"Mean Absolute Error (MAE): {mae}")
     print(f"Median Absolute Error (MedAE): {medae}")
     print(f"R-squared score: {r_squared}")
+    
+        # Plot loss curve
+    if not GridSearch:
+        plt.figure(figsize=(10, 5))
+        plt.plot(history.history['loss'], label='Training Loss')
+        plt.plot(history.history['val_loss'], label='Validation Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Loss Curve')
+        plt.legend()
+        plt.show()
 
     # Plot Predicted vs. Actual Values
     plt.figure(figsize=(10, 5))
@@ -664,6 +676,311 @@ def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridS
     imputed_X_transformed = preprocessor.transform(imputed_X)
     imputed_df["predicted_oms"] = nn_model.predict(imputed_X_transformed)
     
+    return imputed_df
+
+
+# def nn_model_2(training_df, scaler, epochs_number, batch_size, df_estimeres):
+    
+#     import pandas as pd
+#     import numpy as np
+#     import xgboost as xgb
+#     from sklearn.model_selection import train_test_split, learning_curve
+#     from sklearn.metrics import accuracy_score, classification_report
+#     from sklearn.preprocessing import OneHotEncoder
+#     from sklearn.compose import ColumnTransformer
+#     from sklearn.pipeline import Pipeline
+#     from sklearn.impute import SimpleImputer
+#     import matplotlib.pyplot as plt
+    
+
+#     def build_nn_model(input_shape):
+#         model = tf.keras.models.Sequential()
+#         model.add(tf.keras.layers.Dense(64, input_shape=(input_shape,), activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+#         model.add(tf.keras.layers.Dropout(0.5))
+#         model.add(tf.keras.layers.Dense(32, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+#         model.add(tf.keras.layers.Dropout(0.5))
+#         model.add(tf.keras.layers.Dense(1, activation='linear'))
+#         model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mse'])
+#         return model
+
+#     df = training_df.copy()
+#     imputed_df = df_estimeres.copy()
+ 
+#     columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+#     numeric_columns_to_fill = ["inntekt_delta_oms",
+#         "emp_delta_oms",
+#         "befolkning_delta_oms",
+#         "inflation_rate_oms",
+#         "gjeldende_bdr_syss",
+#         "new_oms_trendForecast",
+#         'oms_syssmean_basedOn_naring',
+#         'oms_syssmean_basedOn_naring_kommune']
+
+#     # Fill NaN values with 'missing' for the specified columns
+#     df[columns_to_fill] = df[columns_to_fill].fillna('missing')
+#     imputed_df[columns_to_fill] = imputed_df[columns_to_fill].fillna('missing')
+    
+#     df[numeric_columns_to_fill] = df[numeric_columns_to_fill].fillna(0)
+#     imputed_df[numeric_columns_to_fill] = imputed_df[numeric_columns_to_fill].fillna(0)
+
+#     categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+#     for col in categorical_columns:
+#         df[col] = df[col].astype("category")
+
+#     categorical_features = categorical_columns
+
+#     numerical_features = [
+#         "inntekt_delta_oms",
+#         "emp_delta_oms",
+#         "befolkning_delta_oms",
+#         "inflation_rate_oms",
+#         "gjeldende_bdr_syss",
+#         "new_oms_trendForecast",
+#         'oms_syssmean_basedOn_naring',
+#         'oms_syssmean_basedOn_naring_kommune'
+#     ]
+
+#     X = df.drop(columns=["new_oms"])
+#     y = df["new_oms"]
+
+#     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#     preprocessor = ColumnTransformer(
+#         transformers=[
+#             ("num", scaler, numerical_features),
+#             ("cat", OneHotEncoder(categories="auto", handle_unknown="ignore"), categorical_features),
+#         ]
+#     )
+
+#     X_train_transformed = preprocessor.fit_transform(X_train)
+#     X_test_transformed = preprocessor.transform(X_test)
+#     input_shape = X_train_transformed.shape[1]
+
+#     model = build_nn_model(input_shape)
+    
+#     # Define learning rate scheduler callback
+#     def scheduler(epoch, lr):
+#         if epoch < 60:
+#             return lr
+#         else:
+#             return float(lr * tf.math.exp(-0.1))
+    
+#     lr_scheduler = tf.keras.callbacks.LearningRateScheduler(scheduler)
+#     early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
+#     history = model.fit(
+#         X_train_transformed, y_train,
+#         validation_split=0.2,
+#         epochs=epochs_number,
+#         batch_size=batch_size,
+#         callbacks=[early_stopping, lr_scheduler],
+#         verbose=1
+#     )
+
+#     history_dict = history.history
+#     plt.plot(history_dict['loss'], label='train loss')
+#     plt.plot(history_dict['val_loss'], label='validation loss')
+#     plt.legend()
+#     plt.xlabel('Epochs')
+#     plt.ylabel('Loss')
+#     plt.title('Training vs. Validation Loss')
+#     plt.show()
+
+#     y_pred = model.predict(X_test_transformed).flatten()  # Ensure y_pred is 1-dimensional
+
+#     # Set negative predictions to zero
+#     y_pred = np.maximum(y_pred, 0)
+
+#     mse = mean_squared_error(y_test, y_pred)
+#     mae = mean_absolute_error(y_test, y_pred)
+#     medae = median_absolute_error(y_test, y_pred)
+#     r_squared = r2_score(y_test, y_pred)
+#     rmse = np.sqrt(mse)
+#     mean_y_test = np.mean(y_test)
+
+#     print(f"Mean Squared Error (MSE): {mse}")
+#     print(f"Mean Absolute Error (MAE): {mae}")
+#     print(f"Median Absolute Error (MedAE): {medae}")
+#     print(f"R-squared score: {r_squared}")
+
+#     plt.figure(figsize=(10, 5))
+#     plt.scatter(y_test, y_pred, alpha=0.3)
+#     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--", lw=2)
+#     plt.xlabel("Actual")
+#     plt.ylabel("Predicted")
+#     plt.title("Predicted vs. Actual Values")
+#     plt.show()
+
+#     residuals = y_test - y_pred
+#     plt.figure(figsize=(10, 5))
+#     plt.scatter(y_test, residuals, alpha=0.3)
+#     plt.hlines(0, y_test.min(), y_test.max(), colors="r", linestyles="dashed")
+#     plt.xlabel("Actual")
+#     plt.ylabel("Residuals")
+#     plt.title("Residuals Plot")
+#     plt.show()
+
+#     # imputed_X = imputed_df.drop(columns=["new_oms"])
+#     # imputed_X_transformed = preprocessor.transform(imputed_X)
+#     # imputed_df["predicted_oms"] = model_pipeline.named_steps['nn_model'].predict(imputed_X_transformed)
+    
+#     return imputed_df
+
+def nn_model_2(training_df, scaler, epochs_number, batch_size, df_estimeres):
+    
+    import pandas as pd
+    import numpy as np
+    import tensorflow as tf
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_squared_error, mean_absolute_error, median_absolute_error, r2_score
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.compose import ColumnTransformer
+    import matplotlib.pyplot as plt
+    from IPython.display import clear_output
+
+    def build_nn_model(input_shape):
+        model = tf.keras.models.Sequential()
+        model.add(tf.keras.layers.Dense(64, input_shape=(input_shape,), activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+        model.add(tf.keras.layers.Dropout(0.5))
+        model.add(tf.keras.layers.Dense(32, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01)))
+        model.add(tf.keras.layers.Dropout(0.5))
+        model.add(tf.keras.layers.Dense(1, activation='linear'))
+        model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mse'])
+        return model
+
+    df = training_df.copy()
+    imputed_df = df_estimeres.copy()
+ 
+    columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    numeric_columns_to_fill = ["inntekt_delta_oms",
+        "emp_delta_oms",
+        "befolkning_delta_oms",
+        "inflation_rate_oms",
+        "gjeldende_bdr_syss",
+        "new_oms_trendForecast",
+        'oms_syssmean_basedOn_naring',
+        'oms_syssmean_basedOn_naring_kommune']
+
+    # Fill NaN values with 'missing' for the specified columns
+    df[columns_to_fill] = df[columns_to_fill].fillna('missing')
+    imputed_df[columns_to_fill] = imputed_df[columns_to_fill].fillna('missing')
+    
+    df[numeric_columns_to_fill] = df[numeric_columns_to_fill].fillna(0)
+    imputed_df[numeric_columns_to_fill] = imputed_df[numeric_columns_to_fill].fillna(0)
+
+    categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    for col in categorical_columns:
+        df[col] = df[col].astype("category")
+
+    categorical_features = categorical_columns
+
+    numerical_features = [
+        "inntekt_delta_oms",
+        "emp_delta_oms",
+        "befolkning_delta_oms",
+        "inflation_rate_oms",
+        "gjeldende_bdr_syss",
+        "new_oms_trendForecast",
+        'oms_syssmean_basedOn_naring',
+        'oms_syssmean_basedOn_naring_kommune'
+    ]
+
+    X = df.drop(columns=["new_oms"])
+    y = df["new_oms"]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", scaler, numerical_features),
+            ("cat", OneHotEncoder(categories="auto", handle_unknown="ignore"), categorical_features),
+        ]
+    )
+
+    X_train_transformed = preprocessor.fit_transform(X_train)
+    X_test_transformed = preprocessor.transform(X_test)
+    input_shape = X_train_transformed.shape[1]
+
+    model = build_nn_model(input_shape)
+    
+    # Define learning rate scheduler callback
+    def scheduler(epoch, lr):
+        if epoch < 60:
+            return lr
+        else:
+            return float(lr * tf.math.exp(-0.1))
+    
+    lr_scheduler = tf.keras.callbacks.LearningRateScheduler(scheduler)
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
+    # Real-time plotting function
+    def live_plotting(epoch, logs):
+        loss.append(logs['loss'])
+        val_loss.append(logs['val_loss'])
+        epochs.append(epoch)
+        
+        clear_output(wait=True)  # Clears the output of the cell
+        plt.figure(figsize=(10, 5))
+        plt.plot(epochs, loss, 'b', label='Training loss')
+        plt.plot(epochs, val_loss, 'r', label='Validation loss')
+        plt.title('Training and Validation Loss')
+        plt.legend()
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.show()
+
+    # Lists to hold the values for plotting
+    loss, val_loss, epochs = [], [], []
+    plot_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=live_plotting)
+    
+    history = model.fit(
+        X_train_transformed, y_train,
+        validation_split=0.2,
+        epochs=epochs_number,
+        batch_size=batch_size,
+        callbacks=[early_stopping, lr_scheduler, plot_callback],  # Add the plotting callback
+        verbose=1
+    )
+
+    y_pred = model.predict(X_test_transformed).flatten()  # Ensure y_pred is 1-dimensional
+
+    # Set negative predictions to zero
+    y_pred = np.maximum(y_pred, 0)
+
+    mse = mean_squared_error(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    medae = median_absolute_error(y_test, y_pred)
+    r_squared = r2_score(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    mean_y_test = np.mean(y_test)
+
+    print(f"Mean Squared Error (MSE): {mse}")
+    print(f"Mean Absolute Error (MAE): {mae}")
+    print(f"Median Absolute Error (MedAE): {medae}")
+    print(f"R-squared score: {r_squared}")
+
+    plt.figure(figsize=(10, 5))
+    plt.scatter(y_test, y_pred, alpha=0.3)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--", lw=2)
+    plt.xlabel("Actual")
+    plt.ylabel("Predicted")
+    plt.title("Predicted vs. Actual Values")
+    plt.show()
+
+    residuals = y_test - y_pred
+    plt.figure(figsize=(10, 5))
+    plt.scatter(y_test, residuals, alpha=0.3)
+    plt.hlines(0, y_test.min(), y_test.max(), colors="r", linestyles="dashed")
+    plt.xlabel("Actual")
+    plt.ylabel("Residuals")
+    plt.title("Residuals Plot")
+    plt.show()
+
+    # Predict values for the imputed_df
+    imputed_X = imputed_df.drop(columns=["new_oms"])
+    imputed_X_transformed = preprocessor.transform(imputed_X)
+    imputed_df["predicted_oms"] = model.predict(imputed_X_transformed)
+
     return imputed_df
 
 
