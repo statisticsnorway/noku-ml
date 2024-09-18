@@ -4,13 +4,17 @@ English version:
 
 - [English](NNI_README.md)
 
-Dette programmet har som mål å evaluere ytelsen til NNI-modellen vi bruker i produksjonen av NØKU-statistikken. Dette gjøres ved hjelp av en bootstrap-metode som behandler flere års reg_type 01 foretaksskjema som populasjonen. Et tilfeldig utvalg av dette datasettet blir valgt tilfeldig over X antall iterasjoner for å fungere som et utvalg og 'gi' informasjon til de resterende radene i populasjonen. Resultatene evalueres ved å sammenligne predikert salg med faktisk rapportert salgsinntekt fra undersøkelsesdeltakerne.
+Dette programmet har som mål å evaluere ytelsen til NNI-modellen vi bruker i produksjonen av NØKU-statistikken. Dette gjøres ved hjelp av en bootstrap-metode som behandler flere års reg_type 01 foretaksskjema som populasjonen. Et tilfeldig utvalg av dette datasettet blir valgt tilfeldig over X antall iterasjoner for å fungere som et utvalg og 'giver' informasjon til de resterende radene i populasjonen. Resultatene evalueres ved å sammenligne predikert salg med faktisk rapportert salgsinntekt fra undersøkelsesdeltakerne.
+
+#### Vennligst merk: 
+
+Selv om koden er i stand til å analysere andre grupper og flere grupper samtidig, er alle testene som vises her kun for varehandel og fokuserer kun på imputering av salgsinntekter. Dette ble hovedsakelig gjort for enkelhetens skyld og for å demonstrere et konseptbevis.
 
 Her er en gjennomgang av analysen:
 
 ## Histogramanalyse:
 
-Ikke strengt nødvendig for NNI-testing, men gir viktig kontekst for skjevhet og fordeling av data på et '3-siffer' industrinivå. Dette har viktige implikasjoner for hvor mange foretak vi bør manuelt redigere/sjekke, men også for hvor mange skjema vi bør levere uansett.
+Ikke strengt nødvendig for NNI-testing, men gir viktig kontekst for skjevhet og fordeling av data på et '3-siffer' næringnivå. Dette har viktige implikasjoner for hvor mange foretak vi bør manuelt redigere/sjekke, men også for hvor mange skjema vi bør levere uansett.
 
 ![image](https://github.com/user-attachments/assets/ce08705b-96da-4cc1-b758-671e1fe71e8b)
 
