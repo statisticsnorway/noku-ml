@@ -37,20 +37,6 @@ from dapla import FileClient
 from dapla.auth import AuthClient
 import sgis as sg  # If sgis is re-imported, ensure it is intended.
 
-sys.path.append("../functions")
-import ao
-import input_data
-import kommune
-import kommune_inntekt
-import kommune_pop
-import kommune_translate
-import kpi
-import visualisations 
-import create_datafiles
-import ml_modeller
-import dash_application
-import oppdateringsfil
-
 fs = FileClient.get_gcs_file_system()
 
 warnings.filterwarnings("ignore")
