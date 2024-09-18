@@ -2,7 +2,7 @@
 
 Norsk versjon:
 
-- [Norsk](NNI_README_NO)
+- [Norsk](NNI_README_NO.md)
 
 This program aims to evaulate the performance of the NNI model we use in the production of NØKU statistics. This is done by the use of a bootstrap method that treats several years of reg_type 01 foretak schema responses as the population. A random sample of this dataset is randomly choose over X number of iterations in order to behave as a sample and 'give' information to the remaining rows in the population. Results are evaluated by comparing predicted sales to actual sales revenue reported my the survey responders. 
 
