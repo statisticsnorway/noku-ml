@@ -312,7 +312,7 @@ def animated_thematic_kommune(df):
         kommuner = kommune.kommune(variable, naring, year, filtered_data)
 
         # Create a new map instance with updated data
-        m = sg.ThematicMap(kommuner, column=variable, size=15)
+        m = sg.ThematicMap(kommuner, column=variable, size=10)
         m.title = "Selected Business Metric by Kommune Through the Years"
         m.plot()
 
