@@ -41,16 +41,36 @@ import time
 import kommune_translate
 
 
-def main(year, limit):
+def main(year, limit, skjema):
     start_year = 2017
     all_good_dataframes = []  # List to store good dataframes for each year
     all_bad_dataframes = []   # List to store bad dataframes for each year
     all_training_dataframes = []  # List to store training dataframes for each year
     all_time_series_dataframes = []  # List to store time series dataframes for each year
 
+#     for current_year in range(start_year, year + 1):
+#         fjor = current_year - 1  # Previous year
+
+#         skjema_list = 'RA-0174-1'
+#         fil_path = [
+#             f
+#             for f in fs.glob(
+#                 f"gs://ssb-prod-noeku-data-produkt/eimerdb/nokubasen/skjemadata/aar={current_year}/skjema={skjema_list}/*"
+#             )
+#             if f.endswith(".parquet")
+#         ]
+
+#         # Use the ParquetDataset to read multiple files
+#         dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+#         table = dataset.read()
+
+#         # Convert to Pandas DataFrame
+#         skjema = table.to_pandas()
+
     for current_year in range(start_year, year + 1):
         fjor = current_year - 1  # Previous year
         
+        # skjema_list = ['RA-0174-1', 'RA-0174A3', 'RA-0827A3']
         skjema_list = 'RA-0174-1'
         fil_path = [
             f
@@ -60,12 +80,11 @@ def main(year, limit):
             if f.endswith(".parquet")
         ]
 
-        # Use the ParquetDataset to read multiple files
-        dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-        table = dataset.read()
-
-        # Convert to Pandas DataFrame
-        skjema = table.to_pandas()
+        # Assuming there's only one file in fil_path
+        if fil_path:
+            skjema = pd.read_parquet(fil_path[0], filesystem=fs)
+        else:
+            raise FileNotFoundError(f"No Parquet files found for year {current_year}")
                
         felt_id_values = [
             "V_ORGNR",
@@ -125,18 +144,31 @@ def main(year, limit):
         # Create the 'bedrift' DataFrame
         bedrift = skjema.loc[skjema["radnr"] > 0]
 
-        selected_columns = [
-            "id",
-            "lopenr",
-            "forbruk",
-            "nacef_5",
-            "orgnr_n_1",
-            "salgsint",
-            "tmp_driftskostnad_9010",
-            "tmp_driftskostnad_9910",
-            "tmp_no_omsetn",
-            "tmp_no_p4005",
-        ]
+        if current_year >= 2022:
+            selected_columns = [
+                "id",
+                "lopenr",
+                "forbruk",
+                "orgnr_n_1",
+                "nacef_5",
+                "salgsint",
+                "tmp_driftskostnad_9010",
+                "tmp_no_omsetn",
+                "tmp_no_p4005",
+            ]
+        else:
+            selected_columns = [
+                "id",
+                "lopenr",
+                "forbruk",
+                "nacef_5",
+                "orgnr_n_1",
+                "salgsint",
+                "tmp_driftskostnad_9010",
+                "tmp_driftskostnad_9910",
+                "tmp_no_omsetn",
+                "tmp_no_p4005",
+            ]
 
         foretak = foretak[selected_columns]
 
@@ -146,56 +178,69 @@ def main(year, limit):
 
         foretak = foretak.fillna(0)
 
-        foretak[["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]] = foretak[
-            ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
-        ].apply(pd.to_numeric, errors="coerce")
+        if current_year >= 2022:
+            # Apply numeric conversion and find max for tmp_driftskostnad_9010 only
+            foretak["tmp_driftskostnad_9010"] = pd.to_numeric(foretak["tmp_driftskostnad_9010"], errors="coerce")
+            foretak["foretak_driftskostnad"] = foretak["tmp_driftskostnad_9010"]
 
-        foretak["foretak_driftskostnad"] = foretak[
-            ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
-        ].max(axis=1)
+            # Drop the specified column
+            foretak.drop(["tmp_driftskostnad_9010"], axis=1, inplace=True)
 
-        # Drop the specified columns
-        foretak.drop(["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"], axis=1, inplace=True)
+            columns_to_drop = [
+                "forbruk",
+                "nacef_5",
+                "orgnr_n_1",
+                "salgsint",
+                "tmp_no_omsetn",
+                "tmp_no_p4005",
+            ]
+        else:
+            # Apply numeric conversion and find max for both columns
+            foretak[["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]] = foretak[
+                ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
+            ].apply(pd.to_numeric, errors="coerce")
 
-        columns_to_drop = [
-            "forbruk",
-            "nacef_5",
-            "orgnr_n_1",
-            "salgsint",
-            "tmp_driftskostnad_9010",
-            "tmp_driftskostnad_9910",
-            "tmp_no_omsetn",
-            "tmp_no_p4005",
-        ]
+            foretak["foretak_driftskostnad"] = foretak[
+                ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
+            ].max(axis=1)
+
+            # Drop the specified columns
+            foretak.drop(["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"], axis=1, inplace=True)
+
+            columns_to_drop = [
+                "forbruk",
+                "nacef_5",
+                "orgnr_n_1",
+                "salgsint",
+                "tmp_no_omsetn",
+                "tmp_no_p4005",
+            ]
+
 
         bedrift.drop(columns_to_drop, axis=1, inplace=True)
 
-        columns_to_fill = ["omsetn_kr", "driftskost_kr"]
+        columns_to_fill = ["gjeldende_omsetn_kr", "driftskost_kr"]
 
         # Convert columns to numeric, replacing non-convertible values with NaN
         bedrift[columns_to_fill] = bedrift[columns_to_fill].apply(
             pd.to_numeric, errors="coerce"
         )
+        
+        # if gjeldende_omsetn_kr or driftskost_kr is negative then change to = 0
+        bedrift[columns_to_fill] = bedrift[columns_to_fill].applymap(lambda x: x if x > 0 else 0)
 
         # Fill NaN values with 0 for the specified columns
         bedrift[columns_to_fill] = bedrift[columns_to_fill].fillna(0)
-
-
-        # hjelpe virksomheter
-        if_condition = bedrift["regtype"] == "04"
-
-        # If the condition is True, set 'omsetn_kr' equal to 'driftskost_kr'
-        bedrift.loc[if_condition, "omsetn_kr"] = bedrift.loc[if_condition, "driftskost_kr"]
-
+        
 
         # Group by 'id' and calculate the sum
         grouped_bedrift = (
-            bedrift.groupby("id")[["omsetn_kr", "driftskost_kr"]].sum().reset_index()
+            bedrift.groupby("id")[["gjeldende_omsetn_kr", "driftskost_kr"]].sum().reset_index()
         )
 
         # Rename the columns
         grouped_bedrift.rename(
-            columns={"omsetn_kr": "tot_oms_fordelt", "driftskost_kr": "tot_driftskost_fordelt"},
+            columns={"gjeldende_omsetn_kr": "tot_oms_fordelt", "driftskost_kr": "tot_driftskost_fordelt"},
             inplace=True,
         )
 
@@ -250,13 +295,15 @@ def main(year, limit):
             "orgnr_n_1"
         ].transform("count")
         good_temp_df["distribution_count"] = good_temp_df.groupby("orgnr_n_1")[
-            "omsetn_kr"
+            "gjeldende_omsetn_kr"
         ].transform(lambda x: (x > 0).sum())
 
         # Create 'bad_temp' DataFrame based on conditions
         bad_temp = good_temp_df[
-            (good_temp_df["bedrift_count"] > 5) & (good_temp_df["distribution_count"] <= 2)
+            (good_temp_df["bedrift_count"] > 2) & (good_temp_df["distribution_count"] < 2)
         ]
+        
+        bad_temp['driftskost_kr'] = np.nan
 
         # Create 'good_df' by excluding rows from 'bad_temp'
         good_df = (
@@ -272,6 +319,8 @@ def main(year, limit):
                 & (merged_df["driftskostnader_percentage"] <= limit)
             )
         ]
+        
+        onlygoodoms['driftskost_kr'] = np.nan
 
         onlygooddriftskostnader = merged_df[
             (
@@ -290,7 +339,7 @@ def main(year, limit):
         
         good_df = pd.concat([good_df, onlygoodoms]).drop_duplicates(keep=False)
         
-        good_df["oms_share"] = good_df["omsetn_kr"] / good_df["tot_oms_fordelt"].round(5)
+        good_df["oms_share"] = good_df["gjeldende_omsetn_kr"] / good_df["tot_oms_fordelt"].round(5)
 
         # Round the values to whole numbers before assigning to the new columns
         good_df["new_oms"] = (
@@ -310,10 +359,40 @@ def main(year, limit):
         merged_df["n4"] = merged_df["nacef_5"].str[:5]
 
 
-        kommune_befolk = kommune_pop.befolkning_behandling(current_year, fjor)
-        kommune_inn = kommune_inntekt.inntekt_behandling(current_year, fjor)
-        kpi_df = kpi.process_kpi_data(current_year)
+        # kommune_befolk = kommune_pop.befolkning_behandling(current_year, fjor)
+        # kommune_inn = kommune_inntekt.inntekt_behandling(current_year, fjor)
+        # kpi_df = kpi.process_kpi_data(current_year)
+        
+        # Get kommune population growth , income trends and inflation data 
+        try:
+            kommune_befolk = kommune_pop.befolkning_behandling(current_year, fjor)
+        except Exception as e:
+            print(f"Failed to fetch kommune_befolk for {current_year}. Trying for {current_year - 1}.")
+            try:
+                kommune_befolk = kommune_pop.befolkning_behandling(current_year - 1, fjor - 1)
+            except Exception as e:
+                print(f"Failed to fetch kommune_befolk for {current_year - 1} as well.")
+                kommune_befolk = None
 
+        try:
+            kommune_inn = kommune_inntekt.inntekt_behandling(current_year, fjor)
+        except Exception as e:
+            print(f"Failed to fetch kommune_inn for {current_year}. Trying for {current_year - 1}.")
+            try:
+                kommune_inn = kommune_inntekt.inntekt_behandling(current_year - 1, fjor - 1)
+            except Exception as e:
+                print(f"Failed to fetch kommune_inn for {current_year - 1} as well.")
+                kommune_inn = None
+
+        try:
+            kpi_df = kpi.process_kpi_data(current_year)
+        except Exception as e:
+            print(f"Failed to fetch kpi_df for {current_year}. Trying for {current_year - 1}.")
+            try:
+                kpi_df = kpi.process_kpi_data(current_year - 1)
+            except Exception as e:
+                print(f"Failed to fetch kpi_df for {current_year - 1} as well.")
+                kpi_df = None
         # Convert string columns to numeric
         merged_df["gjeldende_bdr_syss"] = pd.to_numeric(
             merged_df["gjeldende_bdr_syss"], errors="coerce"
@@ -596,6 +675,14 @@ def main(year, limit):
     current_year_bad_oms = bad_data[bad_data['year'] == year]
     v_orgnr_list_for_imputering = current_year_bad_oms['v_orgnr'].tolist()
     
+    
+    # Easy solution for filling Nan Values - only for training, not for editing real data
+    training_data['tmp_sn2007_5'].fillna(training_data['nacef_5'], inplace=True)
+    training_data['b_kommunenr'].fillna('0301', inplace=True)
+    
+    # Replace commas with periods in the 'new_oms' column and convert to float
+    # training_data['new_oms'] = training_data['new_oms'].str.replace(',', '.').astype(float)
+    
     # Create trend data
     
     # Determine the number of CPU cores available
@@ -641,8 +728,23 @@ def main(year, limit):
     # Merge the trend forecasts with the original training data
     training_data = pd.merge(training_data, trend_forecasts, on=["v_orgnr", "year"], how="left")
     
+    # fill nan with 0 
+    
+    # training_data.select_dtypes(include=['number']).fillna(0, inplace=True)
+    
+    
     # Ensure 'new_oms' and 'gjeldende_bdr_syss' are numeric
     training_data['new_oms'] = pd.to_numeric(training_data['new_oms'], errors='coerce')
+    
+    # Fill NaN values in 'new_oms_trendForecast' with values from 'new_oms'
+    training_data['new_oms_trendForecast'].fillna(training_data['new_oms'], inplace=True)
+    
+    # Count the number of NaN values in each column
+    nan_counts = training_data.isna().sum()
+
+    # Print the result
+    print(nan_counts)
+
     training_data['gjeldende_bdr_syss'] = pd.to_numeric(training_data['gjeldende_bdr_syss'], errors='coerce')
     
     training_data = training_data[~training_data['v_orgnr'].isin(['111111111', '123456789'])]
@@ -665,7 +767,18 @@ def main(year, limit):
     training_data['oms_syssmean_basedOn_naring'] = training_data['avg_new_oms_per_gjeldende_bdr_syss'] * training_data['gjeldende_bdr_syss']
     training_data['oms_syssmean_basedOn_naring_kommune'] = training_data['avg_new_oms_per_gjeldende_bdr_syss_kommunenr'] * training_data['gjeldende_bdr_syss']
     
-    
+    # Fill NaN values in specified columns with 0 if 'gjeldende_bdr_syss' is 0
+    columns_to_fill = [
+        'avg_new_oms_per_gjeldende_bdr_syss',
+        'avg_new_oms_per_gjeldende_bdr_syss_kommunenr',
+        'oms_syssmean_basedOn_naring',
+        'oms_syssmean_basedOn_naring_kommune'
+    ]
+
+    # Apply the condition and fill NaN values
+    for col in columns_to_fill:
+        training_data.loc[training_data['gjeldende_bdr_syss'] == 0, col] = training_data.loc[training_data['gjeldende_bdr_syss'] == 0, col].fillna(0)
+
     # Add geographical data:
     
     current_date = datetime.datetime.now()

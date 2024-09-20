@@ -67,12 +67,12 @@ import create_datafiles
 
 
 
-def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
+def create_bedrift_fil(year, model, rate, scaler, skjema, GridSearch=False):
 
     start_time = time.time()
 
     # Generate the data required for processing using the create_datafiles.main function
-    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df = create_datafiles.main(year, rate)
+    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df = create_datafiles.main(year, rate, skjema)
 
     # Construct the function name dynamically based on the model parameter
     function_name = f"{model}"
@@ -111,6 +111,24 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
 
     # Ensure that 'new_oms' values are non-negative
     good_df['new_oms'] = good_df['new_oms'].apply(lambda x: 0 if x < 0 else x)
+    
+    # calculate profit margin in order to fill NaN values for driftskostnader
+    good_df['inverse_profit_margin'] = good_df['foretak_driftskostnad'] / good_df['foretak_omsetning']
+    
+
+    # fill Nan
+    good_df['inverse_profit_margin'] = good_df['inverse_profit_margin'].replace([np.inf, -np.inf], np.nan)  # Replace inf and -inf with NaN
+    good_df['inverse_profit_margin'] = good_df['inverse_profit_margin'].fillna(0)  # Replace NaN with 0
+    
+    # fill NaN values (impute bad driftskostnader using profit margin)
+    
+    good_df['gjeldende_driftsk_kr'] = good_df['gjeldende_driftsk_kr'].fillna(good_df['inverse_profit_margin'] * good_df['new_oms'])
+    
+    # fill Nan
+    good_df['gjeldende_driftsk_kr'] = good_df['gjeldende_driftsk_kr'].replace([np.inf, -np.inf], np.nan)  # Replace inf and -inf with NaN
+    good_df['gjeldende_driftsk_kr'] = good_df['gjeldende_driftsk_kr'].fillna(0)  # Replace NaN with 0
+
+
 
     # Drop the 'tot_oms_fordelt' column as it will be recalculated
     good_df.drop(['tot_oms_fordelt'], axis=1, inplace=True)
@@ -123,15 +141,23 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
 
     # Merge the grouped DataFrame back into the original DataFrame on 'id'
     good_df = pd.merge(good_df, grouped, on="id", how="left")
+    
+    # Replace commas with periods in the 'forbruk' column, convert to float, and round to 0 decimal places
+    good_df['forbruk'] = good_df['forbruk'].str.replace(',', '.').astype(float).round(0)
+
+    # Do the same for the 'salgsint' and 'tmp_no_p4005' columns if needed
+    good_df['salgsint'] = good_df['salgsint'].str.replace(',', '.').astype(float).round(0)
+    good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].str.replace(',', '.').astype(float).round(0)
+
 
     # Convert necessary columns to appropriate data types
     good_df['id'] = good_df['id'].astype(str)
     good_df['nacef_5'] = good_df['nacef_5'].astype(str)
     good_df['orgnr_n_1'] = good_df['orgnr_n_1'].astype(str)
     good_df['b_kommunenr'] = good_df['b_kommunenr'].astype(str)
-    good_df['forbruk'] = good_df['forbruk'].astype(float)
-    good_df['salgsint'] = good_df['salgsint'].astype(float)
-    good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].astype(float)
+    # good_df['forbruk'] = good_df['forbruk'].astype(float)
+    # good_df['salgsint'] = good_df['salgsint'].astype(float)
+    # good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].astype(float)
 
     
    
@@ -868,5 +894,5 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
     print(f"Time taken to create training data: {processing_time:.2f} seconds")
 
     # Return the processed dataframes
-    return oppdateringsfil, timeseries_knn_agg, timeseries_knn__kommune_agg, check_totals, check_manually
+    return oppdateringsfil, timeseries_knn_agg, timeseries_knn__kommune_agg, check_totals, check_manually, v_orgnr_list_for_imputering
 

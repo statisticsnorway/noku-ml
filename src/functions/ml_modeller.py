@@ -256,6 +256,47 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
     print("Mean Squared Error:", mse)
     print("R-squared:", r_squared)
     print("Mean Absolute Error:", mae)
+    
+    X_test['n3'] = X_test['nacef_5'].str[:4]
+    
+    # Evaluate performance based on the n3 class
+    results = pd.DataFrame({'n3': X_test['n3'], 'actual': y_test, 'predicted': y_pred})
+    # Define the n3 categories to exclude
+    n3_to_exclude = ['45.1', '45.2', '46.3', '46.4', '46.5', '46.7', '46.9', '10.4', '02.4']
+
+    # Check if there are any n3 categories not in the excluded list
+    if not results['n3'].isin(n3_to_exclude).all():
+        # Filter out the rows where the n3 is in the excluded list
+        filtered_results = results[~results['n3'].isin(n3_to_exclude)]
+
+        # Extract the actual and predicted values after filtering
+        filtered_y_test = filtered_results['actual']
+        filtered_y_pred = filtered_results['predicted']
+
+        # Recalculate the evaluation metrics excluding the specified n3 categories
+        filtered_mse = mean_squared_error(filtered_y_test, filtered_y_pred)
+        filtered_mae = mean_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_medae = median_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_r_squared = r2_score(filtered_y_test, filtered_y_pred)
+        filtered_rmse = np.sqrt(filtered_mse)
+
+        # Print out the filtered metrics
+        print(f"Filtered Mean Squared Error (MSE): {filtered_mse}")
+        print(f"Filtered Mean Absolute Error (MAE): {filtered_mae}")
+        print(f"Filtered Median Absolute Error (MedAE): {filtered_medae}")
+        print(f"Filtered R-squared score: {filtered_r_squared}")
+        print(f"Filtered Root Mean Squared Error (RMSE): {filtered_rmse}")
+    else:
+        print("No valid n3 categories found after exclusion. Skipping filtered metrics calculation.")
+    
+    metrics_per_n3 = results.groupby('n3').apply(lambda group: pd.Series({
+        'mse': mean_squared_error(group['actual'], group['predicted']),
+        'r_squared': r2_score(group['actual'], group['predicted']),
+        'mae': mean_absolute_error(group['actual'], group['predicted'])
+    })).reset_index()
+    
+    print("Metrics per 'n3':")
+    print(metrics_per_n3)
 
     # Plot the learning history
     results = regressor.evals_result()
@@ -288,6 +329,7 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
     plt.ylabel("Residuals")
     plt.title("Residuals Plot")
     plt.show()
+    
 
     # Tree textual representation
     booster = regressor.get_booster()
@@ -446,6 +488,49 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     print("Mean Squared Error:", mse)
     print("R-squared:", r_squared)
     print("Mean Absolute Error:", mae)
+    
+    # Create the n3 class by taking the first 4 characters of nacef_5
+    X_test['n3'] = X_test['nacef_5'].str[:4]
+    
+    # Evaluate performance based on the n3 class
+    results = pd.DataFrame({'n3': X_test['n3'], 'actual': y_test, 'predicted': y_pred})
+    
+    # Define the n3 categories to exclude
+    n3_to_exclude = ['45.1', '45.2', '46.3', '46.4', '46.5', '46.7', '46.9', '10.4', '02.4']
+
+    # Check if there are any n3 categories not in the excluded list
+    if not results['n3'].isin(n3_to_exclude).all():
+        # Filter out the rows where the n3 is in the excluded list
+        filtered_results = results[~results['n3'].isin(n3_to_exclude)]
+
+        # Extract the actual and predicted values after filtering
+        filtered_y_test = filtered_results['actual']
+        filtered_y_pred = filtered_results['predicted']
+
+        # Recalculate the evaluation metrics excluding the specified n3 categories
+        filtered_mse = mean_squared_error(filtered_y_test, filtered_y_pred)
+        filtered_mae = mean_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_medae = median_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_r_squared = r2_score(filtered_y_test, filtered_y_pred)
+        filtered_rmse = np.sqrt(filtered_mse)
+
+        # Print out the filtered metrics
+        print(f"Filtered Mean Squared Error (MSE): {filtered_mse}")
+        print(f"Filtered Mean Absolute Error (MAE): {filtered_mae}")
+        print(f"Filtered Median Absolute Error (MedAE): {filtered_medae}")
+        print(f"Filtered R-squared score: {filtered_r_squared}")
+        print(f"Filtered Root Mean Squared Error (RMSE): {filtered_rmse}")
+    else:
+        print("No valid n3 categories found after exclusion. Skipping filtered metrics calculation.")
+
+    metrics_per_n3 = results.groupby('n3').apply(lambda group: pd.Series({
+        'mse': mean_squared_error(group['actual'], group['predicted']),
+        'r_squared': r2_score(group['actual'], group['predicted']),
+        'mae': mean_absolute_error(group['actual'], group['predicted'])
+    })).reset_index()
+    
+    print("Metrics per 'n3':")
+    print(metrics_per_n3)
     
     # Plot Predicted vs. Actual Values
     plt.figure(figsize=(10, 5))
@@ -640,6 +725,48 @@ def nn_model_1(training_df, scaler, epochs_number, batch_size, df_estimeres, Gri
     print(f"Mean Absolute Error (MAE): {mae}")
     print(f"Median Absolute Error (MedAE): {medae}")
     print(f"R-squared score: {r_squared}")
+    
+    X_test['n3'] = X_test['nacef_5'].str[:4]
+    
+    # Evaluate performance based on the n3 class
+    results = pd.DataFrame({'n3': X_test['n3'], 'actual': y_test, 'predicted': y_pred})
+    
+    # Define the n3 categories to exclude
+    n3_to_exclude = ['45.1', '45.2', '46.3', '46.4', '46.5', '46.7', '46.9', '10.4', '02.4']
+
+    # Check if there are any n3 categories not in the excluded list
+    if not results['n3'].isin(n3_to_exclude).all():
+        # Filter out the rows where the n3 is in the excluded list
+        filtered_results = results[~results['n3'].isin(n3_to_exclude)]
+
+        # Extract the actual and predicted values after filtering
+        filtered_y_test = filtered_results['actual']
+        filtered_y_pred = filtered_results['predicted']
+
+        # Recalculate the evaluation metrics excluding the specified n3 categories
+        filtered_mse = mean_squared_error(filtered_y_test, filtered_y_pred)
+        filtered_mae = mean_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_medae = median_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_r_squared = r2_score(filtered_y_test, filtered_y_pred)
+        filtered_rmse = np.sqrt(filtered_mse)
+
+        # Print out the filtered metrics
+        print(f"Filtered Mean Squared Error (MSE): {filtered_mse}")
+        print(f"Filtered Mean Absolute Error (MAE): {filtered_mae}")
+        print(f"Filtered Median Absolute Error (MedAE): {filtered_medae}")
+        print(f"Filtered R-squared score: {filtered_r_squared}")
+        print(f"Filtered Root Mean Squared Error (RMSE): {filtered_rmse}")
+    else:
+        print("No valid n3 categories found after exclusion. Skipping filtered metrics calculation.")
+    
+    metrics_per_n3 = results.groupby('n3').apply(lambda group: pd.Series({
+        'mse': mean_squared_error(group['actual'], group['predicted']),
+        'r_squared': r2_score(group['actual'], group['predicted']),
+        'mae': mean_absolute_error(group['actual'], group['predicted'])
+    })).reset_index()
+    
+    print("Metrics per 'n3':")
+    print(metrics_per_n3)
     
         # Plot loss curve
     if not GridSearch:
@@ -958,6 +1085,48 @@ def nn_model_2(training_df, scaler, epochs_number, batch_size, df_estimeres):
     print(f"Mean Absolute Error (MAE): {mae}")
     print(f"Median Absolute Error (MedAE): {medae}")
     print(f"R-squared score: {r_squared}")
+    
+    X_test['n3'] = X_test['nacef_5'].str[:4]
+    
+    # Evaluate performance based on the n3 class
+    results = pd.DataFrame({'n3': X_test['n3'], 'actual': y_test, 'predicted': y_pred})
+    
+    # Define the n3 categories to exclude
+    n3_to_exclude = ['45.1', '45.2', '46.3', '46.4', '46.5', '46.7', '46.9', '10.4', '02.4']
+
+    # Check if there are any n3 categories not in the excluded list
+    if not results['n3'].isin(n3_to_exclude).all():
+        # Filter out the rows where the n3 is in the excluded list
+        filtered_results = results[~results['n3'].isin(n3_to_exclude)]
+
+        # Extract the actual and predicted values after filtering
+        filtered_y_test = filtered_results['actual']
+        filtered_y_pred = filtered_results['predicted']
+
+        # Recalculate the evaluation metrics excluding the specified n3 categories
+        filtered_mse = mean_squared_error(filtered_y_test, filtered_y_pred)
+        filtered_mae = mean_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_medae = median_absolute_error(filtered_y_test, filtered_y_pred)
+        filtered_r_squared = r2_score(filtered_y_test, filtered_y_pred)
+        filtered_rmse = np.sqrt(filtered_mse)
+
+        # Print out the filtered metrics
+        print(f"Filtered Mean Squared Error (MSE): {filtered_mse}")
+        print(f"Filtered Mean Absolute Error (MAE): {filtered_mae}")
+        print(f"Filtered Median Absolute Error (MedAE): {filtered_medae}")
+        print(f"Filtered R-squared score: {filtered_r_squared}")
+        print(f"Filtered Root Mean Squared Error (RMSE): {filtered_rmse}")
+    else:
+        print("No valid n3 categories found after exclusion. Skipping filtered metrics calculation.")
+    
+    metrics_per_n3 = results.groupby('n3').apply(lambda group: pd.Series({
+        'mse': mean_squared_error(group['actual'], group['predicted']),
+        'r_squared': r2_score(group['actual'], group['predicted']),
+        'mae': mean_absolute_error(group['actual'], group['predicted'])
+    })).reset_index()
+    
+    print("Metrics per 'n3':")
+    print(metrics_per_n3)
 
     plt.figure(figsize=(10, 5))
     plt.scatter(y_test, y_pred, alpha=0.3)
@@ -1231,11 +1400,20 @@ def knn_n3_klass(df):
     
     
 def test_results(df, aar):
+    # Convert aar to an integer if it's not already
+    year = int(aar)
     
+    # Determine the correct file name based on the value of aar
+    if year < 2022:
+        fil_navn = 'statistikkfil_bedrifter_nr.parquet'
+    else:
+        fil_navn = 'statistiske_foretak_bedrifter.parquet'
+    
+    # Define the file path based on the determined file name
     fil_path = [
         f
         for f in fs.glob(
-            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{aar}/statistikkfil_bedrifter_nr.parquet"
+            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{aar}/{fil_navn}"
         )
         if f.endswith(".parquet")
     ]
@@ -1246,6 +1424,8 @@ def test_results(df, aar):
 
     # Convert to Pandas DataFrame
     bedrift_2 = table.to_pandas()
+    
+    bedrift_2.columns = bedrift_2.columns.str.lower()  # Convert column names to lower case
 
     # change pd option to show all columns
     pd.set_option("display.max_columns", None)
@@ -1304,13 +1484,24 @@ def test_results(df, aar):
 
 def fetch_foretak_data(aar):
     
-    # Fetch paths to all Parquet files for the specified year related to foretak (enterprises)
+        # Convert aar to an integer if it's not already
+    year = int(aar)
+    
+    # Determine the correct file name based on the value of aar
+    if year < 2022:
+        fil_navn = 'statistikkfil_foretak_pub.parquet'
+    else:
+        fil_navn = 'statistiske_foretak_foretak.parquet'
+    
+    # Define the file path based on the determined file name
     fil_path = [
-        f for f in fs.glob(
-            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{aar}/statistikkfil_foretak_pub.parquet"
-        ) if f.endswith(".parquet")
+        f
+        for f in fs.glob(
+            f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{aar}/{fil_navn}"
+        )
+        if f.endswith(".parquet")
     ]
-
+    
     # Use the ParquetDataset to read multiple Parquet files into a single Arrow Table
     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
     table = dataset.read()
@@ -1333,3 +1524,109 @@ def fetch_foretak_data(aar):
                                          'nopost_driftsinntekter', 'sysselsetting_syss']]
     
     return foretak_pub, foretak_varendel
+
+
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+import matplotlib.pyplot as plt
+
+def lstm_model(training_df):
+    """
+    Trains an LSTM model for predicting new_oms values with hierarchical modeling based on v_orgnr, nace, and kommunenr.
+
+    Parameters:
+    training_df (pd.DataFrame): DataFrame containing the training data.
+    scaler (object): Scaler object for numerical features (e.g., StandardScaler, RobustScaler).
+    df_estimeres (pd.DataFrame): DataFrame containing the data to be imputed.
+    epochs (int): Number of epochs for training the LSTM.
+    batch_size (int): Batch size for training the LSTM.
+
+    Returns:
+    pd.DataFrame: DataFrame with predicted new_oms values.
+    """
+    # Prepare data
+    df = training_df.copy()
+    import pandas as pd
+    import numpy as np
+    from sklearn.preprocessing import MinMaxScaler, LabelEncoder
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    import matplotlib.pyplot as plt
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
+
+    # Assume df is your DataFrame and it has been properly sorted and prepared as per the previous steps.
+    df = df.sort_values(by=['v_orgnr', 'year'])
+
+    # Create lag features and other engineered features
+    df['new_oms_lag1'] = df.groupby('v_orgnr')['new_oms'].shift(1)
+    df['new_oms_lag2'] = df.groupby('v_orgnr')['new_oms'].shift(2)
+
+    # Drop rows with NaN values from lag features
+    df = df.dropna()
+
+    # Encode categorical variables
+    le_nacef_5 = LabelEncoder()
+    df['nacef_5_encoded'] = le_nacef_5.fit_transform(df['nacef_5'])
+
+    # Feature selection
+    features = ['new_oms_lag1', 'new_oms_lag2', 'inntekt_delta_oms', 'emp_delta_oms', 
+                'befolkning_delta_oms', 'inflation_rate_oms', 'gjeldende_bdr_syss', 
+                'nacef_5_encoded', 'avg_new_oms_per_gjeldende_bdr_syss', 
+                'avg_new_oms_per_gjeldende_bdr_syss_kommunenr']
+
+    X = df[features]
+    y = df['new_oms']
+
+    # Scale features
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Reshape input for LSTM [samples, time steps, features]
+    X_scaled = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
+
+    # Split the data into training and validation sets
+    train_size = int(len(X_scaled) * 0.8)
+    X_train, X_val = X_scaled[:train_size], X_scaled[train_size:]
+    y_train, y_val = y[:train_size], y[train_size:]
+
+    # LSTM Model
+    model = Sequential()
+    model.add(LSTM(100, input_shape=(X_train.shape[1], X_train.shape[2]), return_sequences=True))
+    model.add(Dropout(0.2))
+    model.add(LSTM(50, return_sequences=False))
+    model.add(Dropout(0.2))
+    model.add(Dense(1))
+    model.compile(loss='mse', optimizer='adam')
+
+    # Train the model
+    history = model.fit(X_train, y_train, epochs=100, batch_size=32, validation_data=(X_val, y_val), verbose=2, shuffle=False)
+
+    # Predict on validation set
+    y_pred = model.predict(X_val)
+
+    # Evaluate model performance
+    mse = mean_squared_error(y_val, y_pred)
+    mae = mean_absolute_error(y_val, y_pred)
+    r2 = r2_score(y_val, y_pred)
+
+    print(f'Mean Squared Error: {mse}')
+    print(f'Mean Absolute Error: {mae}')
+    print(f'R^2 Score: {r2}')
+
+    # Plot learning loss curve
+    plt.figure(figsize=(10, 6))
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Learning Curve')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss (MSE)')
+    plt.legend()
+    plt.show()
+
+
+
