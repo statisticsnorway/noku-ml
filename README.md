@@ -1,4 +1,4 @@
-# noku_ml
+# noku-ml
 
 Norsk versjon:
 
