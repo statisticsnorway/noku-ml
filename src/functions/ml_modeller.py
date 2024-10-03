@@ -384,16 +384,21 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     pd.DataFrame: DataFrame with predicted new_oms values.
     """
     import numpy as np
-    from sklearn.model_selection import train_test_split, GridSearchCV
+    from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
     from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
     from sklearn.preprocessing import OneHotEncoder
     from sklearn.compose import ColumnTransformer
     from sklearn.neighbors import KNeighborsRegressor
     import matplotlib.pyplot as plt
+    import pandas as pd
 
     # Make copies of the input DataFrames
     df = training_df.copy()
     imputed_df = df_estimeres.copy()
+    
+    categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    df[categorical_columns] = df[categorical_columns].astype(str)
+    imputed_df[categorical_columns] = imputed_df[categorical_columns].astype(str)
 
     # Columns to fill with 'missing' and 0 respectively
     columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
@@ -417,7 +422,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     imputed_df[numeric_columns_to_fill] = imputed_df[numeric_columns_to_fill].fillna(0)
 
     # Convert specified columns to category type
-    categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    # categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
 
@@ -427,6 +432,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
 
     # Define preprocessor
     categorical_features = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    
     numerical_features = [
         "inntekt_delta_oms",
         "emp_delta_oms",
@@ -463,7 +469,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
         }
 
         # Perform GridSearch with cross-validation
-        grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=3, verbose=1)
+        grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=5, verbose=1)
         grid_search.fit(X_train_transformed, y_train)
 
         # Print best parameters
@@ -477,6 +483,17 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
 
         # Train the model
         regressor.fit(X_train_transformed, y_train)
+
+    # Perform cross-validation using MAE as the scoring metric
+    cv_scores = cross_val_score(regressor, X_train_transformed, y_train, cv=5, scoring='neg_mean_absolute_error')
+
+    # Since cross_val_score returns negative values for error metrics, we negate them to get the actual MAE
+    mean_mae = -np.mean(cv_scores)
+    std_mae = np.std(cv_scores)
+
+    print(f"Cross-Validated Mean MAE: {mean_mae}")
+    print(f"Cross-Validated MAE Standard Deviation: {std_mae}")
+
 
     # Predict on test data
     y_pred = regressor.predict(X_test_transformed)
@@ -510,14 +527,12 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
         # Recalculate the evaluation metrics excluding the specified n3 categories
         filtered_mse = mean_squared_error(filtered_y_test, filtered_y_pred)
         filtered_mae = mean_absolute_error(filtered_y_test, filtered_y_pred)
-        filtered_medae = median_absolute_error(filtered_y_test, filtered_y_pred)
         filtered_r_squared = r2_score(filtered_y_test, filtered_y_pred)
         filtered_rmse = np.sqrt(filtered_mse)
 
         # Print out the filtered metrics
         print(f"Filtered Mean Squared Error (MSE): {filtered_mse}")
         print(f"Filtered Mean Absolute Error (MAE): {filtered_mae}")
-        print(f"Filtered Median Absolute Error (MedAE): {filtered_medae}")
         print(f"Filtered R-squared score: {filtered_r_squared}")
         print(f"Filtered Root Mean Squared Error (RMSE): {filtered_rmse}")
     else:
@@ -557,6 +572,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
     
     return imputed_df
+
 
 
 
@@ -953,7 +969,7 @@ def nn_model_1(training_df, scaler, epochs_number, batch_size, df_estimeres, Gri
     
 #     return imputed_df
 
-def nn_model_2(training_df, scaler, epochs_number, batch_size, df_estimeres):
+def nn_model(training_df, scaler, epochs_number, batch_size, df_estimeres, GridSearch=False):
     
     import pandas as pd
     import numpy as np

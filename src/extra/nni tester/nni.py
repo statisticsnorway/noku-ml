@@ -323,26 +323,53 @@ def bootstrap(df, number_iterations):
 
     print(f"Average Mean Absolute Error: {avg_mae}")
     print(f"Average R-squared: {avg_r_squared}")
-    print(f"Average Percentage Difference: {avg_percentage_diff}%")
+    # print(f"Average Percentage Difference: {avg_percentage_diff}%")
 
-    # Optionally, plot the distribution of MAE across simulations
-    mae_values = [result['MAE'] for result in summary_stats]
-    plt.hist(mae_values, bins=10, alpha=0.75)
-    plt.title('Distribution of MAE across Simulations')
-    plt.xlabel('Mean Absolute Error')
-    plt.ylabel('Frequency')
-    plt.show()
+#     # Optionally, plot the distribution of MAE across simulations
+    # mae_values = [result['MAE'] for result in summary_stats]
+#     plt.hist(mae_values, bins=10, alpha=0.75)
+#     plt.title('Distribution of MAE across Simulations')
+#     plt.xlabel('Mean Absolute Error')
+#     plt.ylabel('Frequency')
+#     plt.show()
 
-    # Adding Residual Plot
+#     # Adding Residual Plot
     results_df['residuals'] = results_df['salgsint'] - results_df['predicted_salgsint']
 
+#     plt.figure(figsize=(10, 6))
+#     plt.scatter(results_df['predicted_salgsint'], results_df['residuals'], alpha=0.5)
+#     plt.axhline(y=0, color='k', linestyle='--', lw=2)
+#     plt.title('Residual Plot')
+#     plt.xlabel('Predicted Sales')
+#     plt.ylabel('Residuals (Actual - Predicted)')
+#     plt.show()
+
+    import seaborn as sns
+    mae_values = [result['MAE'] for result in summary_stats]
+    # Set a color palette
+    sns.set_palette("coolwarm", n_colors=10)
+
+    # Histogram of MAE with custom color and styling
     plt.figure(figsize=(10, 6))
-    plt.scatter(results_df['predicted_salgsint'], results_df['residuals'], alpha=0.5)
-    plt.axhline(y=0, color='k', linestyle='--', lw=2)
-    plt.title('Residual Plot')
-    plt.xlabel('Predicted Sales')
-    plt.ylabel('Residuals (Actual - Predicted)')
+    plt.hist(mae_values, bins=10, alpha=0.75, color=sns.color_palette()[1], edgecolor='black')
+    plt.title('Distribution of MAE across Simulations', fontsize=16)
+    plt.xlabel('Mean Absolute Error', fontsize=12)
+    plt.ylabel('Frequency', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
     plt.show()
+    
+    plt.figure(figsize=(10, 6))
+    plt.scatter(results_df['predicted_salgsint'], results_df['residuals'], alpha=0.5, 
+                c=results_df['residuals'], cmap='coolwarm', edgecolor='black', s=50)
+    plt.axhline(y=0, color='k', linestyle='--', lw=2)
+    plt.title('Residual Plot', fontsize=16)
+    plt.xlabel('Predicted Sales', fontsize=12)
+    plt.ylabel('Residuals (Actual - Predicted)', fontsize=12)
+    plt.colorbar(label='Residuals')
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.show()
+
+
     
 
 def evaluate_varehandel(current_year, start_year):
