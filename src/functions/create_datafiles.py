@@ -41,8 +41,15 @@ import time
 import kommune_translate
 
 
-def main(year, limit, skjema):
-    start_year = 2017
+def main(year, limit, skjema_nr, distribtion_percent):
+    
+    
+    # Assuming 'skjema' is a variable or a column in a DataFrame
+    if skjema_nr == 'RA-1100':
+        start_year = 2018
+    else:
+        start_year = 2017
+
     all_good_dataframes = []  # List to store good dataframes for each year
     all_bad_dataframes = []   # List to store bad dataframes for each year
     all_training_dataframes = []  # List to store training dataframes for each year
@@ -71,7 +78,8 @@ def main(year, limit, skjema):
         fjor = current_year - 1  # Previous year
         
         # skjema_list = ['RA-0174-1', 'RA-0174A3', 'RA-0827A3']
-        skjema_list = 'RA-0174-1'
+        # skjema_list = 'RA-0174-1'
+        skjema_list = skjema_nr
         fil_path = [
             f
             for f in fs.glob(
@@ -123,6 +131,12 @@ def main(year, limit, skjema):
             "TMP_NO_OMSETN",
             "TMP_DRIFTSKOSTNAD_9010",
             "TMP_DRIFTSKOSTNAD_9910",
+            "TMP_OMS",
+            "NO_OMS",
+            "B_DRIFTSKOSTNADER",
+            "B_OMSETNING",
+            "TMP_B_SN07_1",
+            "REG_TYPE_BEDRIFT"
         ]
 
         # Filter the DataFrame for the specified field values
@@ -137,6 +151,106 @@ def main(year, limit, skjema):
         )
         skjema = skjema.reset_index()
         skjema.columns = skjema.columns.str.lower()  # Convert column names to lower case
+        
+        # Assuming 'skjema_list' is a variable, not a column in the DataFrame
+        if skjema_list == 'RA-1403':
+            # Rename the column 'tmp_oms' to 'tmp_no_omsetn'
+            skjema.rename(columns={'tmp_oms': 'tmp_no_omsetn'}, inplace=True)
+            
+        if skjema_list == 'RA-0255-1':
+            # Rename the column 'tmp_oms' to 'tmp_no_omsetn'
+            skjema.rename(columns={'no_oms': 'tmp_no_omsetn'}, inplace=True)
+            
+                        # Get varekostnad data on foretak level
+            fil_path = [
+                f
+                for f in fs.glob(
+                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{current_year}/statistikkfil_foretak_pub.parquet"
+                )
+                if f.endswith(".parquet")
+            ]
+
+            # Use the ParquetDataset to read multiple files
+            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            
+            table = dataset.read()
+
+            # Convert to Pandas DataFrame
+            foretak_pub = table.to_pandas()
+
+            # Check if current_year is 2022 or higher
+            if current_year >= 2023:
+                foretak_pub = foretak_pub[['nopost_p4005', 'enhets_id', 'nopost_driftskostnader']]
+                foretak_pub.rename(columns={'nopost_driftskostnader': 'tmp_driftskostnad_9010'}, inplace=True)
+            else:
+                foretak_pub = foretak_pub[['nopost_p4005', 'enhets_id']]
+
+
+            foretak_pub.rename(columns={'nopost_p4005': 'tmp_no_p4005', 'enhets_id': 'id'}, inplace=True)
+
+            skjema = pd.merge(skjema, foretak_pub, how='left', on='id')
+            
+            # fill tmp_no_p4005 nan with 0
+            skjema['tmp_no_p4005'].fillna(0, inplace=True)
+            
+            del foretak_pub, dataset, table
+            
+        if skjema_list == 'RA-1100':
+            
+            # Get data on foretak level
+            fil_path = [
+                f
+                for f in fs.glob(
+                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{current_year}/statistikkfil_foretak_pub.parquet"
+                )
+                if f.endswith(".parquet")
+            ]
+
+            # Use the ParquetDataset to read multiple files
+            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            table = dataset.read()
+
+            # Convert to Pandas DataFrame
+            foretak_pub = table.to_pandas()
+
+            foretak_pub = foretak_pub[['nopost_p4005', 'enhets_id', 'omsetning', 'naring_f']]
+
+            foretak_pub.rename(columns={'nopost_p4005': 'tmp_no_p4005', 'enhets_id': 'id', 'omsetning': 'tmp_no_omsetn', 'naring_f': 'nacef_5'}, inplace=True)
+
+            skjema = pd.merge(skjema, foretak_pub, how='left', on='id')
+
+            skjema.rename(columns={'b_omsetning': 'gjeldende_omsetn_kr', 'b_driftskostnader': 'driftskost_kr', 'tmp_b_sn07_1': 'tmp_sn2007_5', 'reg_type_bedrift': 'regtype'}, inplace=True)
+            
+            skjema['gjeldende_bdr_syss'] = skjema['b_sysselsetting_syss']
+            
+            # fill tmp_no_p4005 nan with 0
+            skjema['tmp_no_p4005'].fillna(0, inplace=True)
+            
+            fil_path = [
+                f
+                for f in fs.glob(
+                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{fjor}/statistikkfil_bedrifter_pub.parquet"
+                )
+                if f.endswith(".parquet")
+            ]
+
+            # Use the ParquetDataset to read multiple files
+            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            table = dataset.read()
+
+            # Convert to Pandas DataFrame
+            bedrift_pub = table.to_pandas()
+            
+            bedrift_pub = bedrift_pub[['sysselsetting_syss', 'enhets_id', 'omsetning']]
+            
+            bedrift_pub.rename(columns={'sysselsetting_syss': 'fjor_syssel_t1', 'enhets_id': 'id', 'omsetning': 'fjor_omsetn_kr_t1'}, inplace=True)
+            
+            skjema = pd.merge(skjema, bedrift_pub, how='left', on='id')
+            
+            skjema['fjor_syssel_t1'].fillna(0, inplace=True)
+        
+            
+            del bedrift_pub, dataset, table        
         
         # Foretak level data is always when radnr = 0
         foretak = skjema.loc[skjema["radnr"] == 0]
@@ -299,9 +413,15 @@ def main(year, limit, skjema):
         ].transform(lambda x: (x > 0).sum())
 
         # Create 'bad_temp' DataFrame based on conditions
+        # bad_temp = good_temp_df[
+        #     (good_temp_df["bedrift_count"] >= 2) & (good_temp_df["distribution_count"] < 2)
+        # ]
+        
+        good_temp_df['distribution_rate'] = good_temp_df['distribution_count'] / good_temp_df['bedrift_count']
+        
         bad_temp = good_temp_df[
-            (good_temp_df["bedrift_count"] > 2) & (good_temp_df["distribution_count"] < 2)
-        ]
+            (good_temp_df["bedrift_count"] >= 2) & (good_temp_df["distribution_rate"] <= distribtion_percent)
+        ]                
         
         bad_temp['driftskost_kr'] = np.nan
 
@@ -405,6 +525,8 @@ def main(year, limit, skjema):
         merged_df["emp_delta"] = merged_df["gjeldende_bdr_syss"] / merged_df["fjor_syssel_t1"]
 
         imputable_df = merged_df.copy()
+        
+        test3 = imputable_df.copy()
 
 
         imputable_df = imputable_df.drop_duplicates(subset=["v_orgnr"])
@@ -431,12 +553,25 @@ def main(year, limit, skjema):
             imputable_df["inntekt_delta"], errors="coerce"
         )
 
-        general_inflation_rate = imputable_df.loc[
-            imputable_df["n4"] == "47.78", "inflation_rate"
-        ].values[0]
-        imputable_df["inflation_rate"] = imputable_df["inflation_rate"].fillna(
-            general_inflation_rate
-        )
+        # general_inflation_rate = imputable_df.loc[
+        #     imputable_df["n4"] == "47.78", "inflation_rate"
+        # ].values[0]
+        
+        
+        # Fetch the general inflation rate for the current year
+        general_inflation_rate = kpi.fetch_general_inflation_rate(current_year)
+
+        # If fetching for the current year fails, try fetching for the previous year
+        if general_inflation_rate is None:
+            general_inflation_rate = kpi.fetch_general_inflation_rate(current_year - 1)
+
+        # Fill missing inflation rate values with the fetched general inflation rate
+        imputable_df["inflation_rate"] = imputable_df["inflation_rate"].fillna(general_inflation_rate)
+
+        
+        # imputable_df["inflation_rate"] = imputable_df["inflation_rate"].fillna(
+        #     general_inflation_rate
+        # )
 
         imputable_df["inflation_rate_oms"] = (
             imputable_df["fjor_omsetn_kr_t1"] * imputable_df["inflation_rate"]
@@ -575,6 +710,8 @@ def main(year, limit, skjema):
 
         imputable_df = pd.merge(imputable_df, knn_df, how="inner", on="v_orgnr")
 
+        
+        # Leave on or off?
         imputable_df_filtered = imputable_df[~imputable_df["regtype"].isin(["04", "11"])]
 
 
@@ -674,7 +811,7 @@ def main(year, limit, skjema):
     current_year_good_oms = good_data[good_data['year'] == year]
     current_year_bad_oms = bad_data[bad_data['year'] == year]
     v_orgnr_list_for_imputering = current_year_bad_oms['v_orgnr'].tolist()
-    
+    unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith('68')]['id'].unique().tolist()   
     
     # Easy solution for filling Nan Values - only for training, not for editing real data
     training_data['tmp_sn2007_5'].fillna(training_data['nacef_5'], inplace=True)
@@ -743,10 +880,12 @@ def main(year, limit, skjema):
     nan_counts = training_data.isna().sum()
 
     # Print the result
+    print("Number of NaN values in training variables")
     print(nan_counts)
 
     training_data['gjeldende_bdr_syss'] = pd.to_numeric(training_data['gjeldende_bdr_syss'], errors='coerce')
     
+    # remove temp orgnr rows. 
     training_data = training_data[~training_data['v_orgnr'].isin(['111111111', '123456789'])]
     
     training_data = kommune_translate.translate_kommune_kodes_2(training_data)
@@ -853,7 +992,15 @@ def main(year, limit, skjema):
     merging_df = current_year_bad_oms[['v_orgnr', 'id', 'year', 'lopenr']]
 
     imputatable_df = pd.merge(merging_df, temp, on=['v_orgnr', 'id', 'year'], how='left')
+    
+    test4 = imputatable_df.copy()
       
     training_data = training_data[~training_data['v_orgnr'].isin(v_orgnr_list_for_imputering)]
+    
+    test5 = current_year_good_oms.copy()
+    
+    test6 = current_year_bad_oms.copy()
+    
+    test7 = training_data.copy()
 
-    return current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df
+    return current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list
