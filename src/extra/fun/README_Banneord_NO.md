@@ -1,3 +1,4 @@
+Just here to put my name on it MVH Eigil
 # NØKU Banneordanalyse
 
 English version:
