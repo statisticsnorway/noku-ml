@@ -14,7 +14,7 @@ Here is a run through of the analysis:
 
 ## Histogram Analysis:
 
-Not strictly necessary for the NNI testing, however provides important context for the skewness and distribution of data on a '3 - siffer' industry level. This has important implications for how many foretak we should be mandually editing/checking, but also for how many skjema we should be delivering in any case. 
+Not strictly necessary for the NNI testing, however provides important context for the skewness and distribution of data on a '3 - siffer' industry level. This has important implications for how many foretak we should be manually edited/checked, but also for how many skjema we should be delivering in any case. 
 
 
 ![image](https://github.com/user-attachments/assets/ce08705b-96da-4cc1-b758-671e1fe71e8b)
