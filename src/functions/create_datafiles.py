@@ -41,40 +41,24 @@ import time
 import kommune_translate
 
 
-def main(year, limit, skjema_nr, distribtion_percent):
+def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=False, uu_data=False):
     
     
-    # Assuming 'skjema' is a variable or a column in a DataFrame
-    if skjema_nr == 'RA-1100':
-        start_year = 2018
-    else:
-        start_year = 2017
+    # # Assuming 'skjema' is a variable or a column in a DataFrame
+    # if skjema_nr == 'RA-1100':
+    #     start_year = 2018
+    # else:
+    #     start_year = 2017
+    
+    start_year = 2018
 
     all_good_dataframes = []  # List to store good dataframes for each year
     all_bad_dataframes = []   # List to store bad dataframes for each year
     all_training_dataframes = []  # List to store training dataframes for each year
     all_time_series_dataframes = []  # List to store time series dataframes for each year
 
-#     for current_year in range(start_year, year + 1):
-#         fjor = current_year - 1  # Previous year
-
-#         skjema_list = 'RA-0174-1'
-#         fil_path = [
-#             f
-#             for f in fs.glob(
-#                 f"gs://ssb-prod-noeku-data-produkt/eimerdb/nokubasen/skjemadata/aar={current_year}/skjema={skjema_list}/*"
-#             )
-#             if f.endswith(".parquet")
-#         ]
-
-#         # Use the ParquetDataset to read multiple files
-#         dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-#         table = dataset.read()
-
-#         # Convert to Pandas DataFrame
-#         skjema = table.to_pandas()
-
     for current_year in range(start_year, year + 1):
+        
         fjor = current_year - 1  # Previous year
         
         # skjema_list = ['RA-0174-1', 'RA-0174A3', 'RA-0827A3']
@@ -470,11 +454,105 @@ def main(year, limit, skjema_nr, distribtion_percent):
         bad_df["new_oms"] = bad_df["gjeldende_omsetn_kr"]
         merged_df = pd.concat([good_df, bad_df], ignore_index=True)
         
+        # merged_df = good_df.copy()
+        
         time_series_df = merged_df.copy()
 
         # bad_df["new_oms"] = bad_df["gjeldende_omsetn_kr"]
 
         del onlygooddriftskostnader
+                 
+        if uu_data:
+            
+            print("uu_data is True, proceeding with data processing...")
+            
+            fil_path = [
+                f
+                for f in fs.glob(
+                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{year}/statistikkfil_bedrifter_pub.parquet"
+                )
+                if f.endswith(".parquet")
+            ]
+
+            # Use the ParquetDataset to read multiple files
+            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            table = dataset.read()
+
+            # Convert to Pandas DataFrame
+            bedrift_pub = table.to_pandas()
+            
+            bedrift_pub.columns = bedrift_pub.columns.str.lower()
+
+            del table, dataset
+
+            # filter for when reg_type_f = 01
+            bedrift_pub = bedrift_pub[bedrift_pub['reg_type_f'] == '01']
+            bedrift_pub = bedrift_pub[bedrift_pub['type'] != 'S']
+
+            bedrift_pub = bedrift_pub[['ts_forbruk', 'naring_f', 'orgnr_foretak', 'ts_salgsint', 'omsetning', 'nopost_p4005', 'nopost_driftskostnader', 'kommune', 'sysselsetting_syss', 'naring', 'orgnr_bedrift']]
+
+            bedrift_pub['lopenr'] = 1
+            bedrift_pub['radnr'] = 1
+
+            bedrift_pub['driftskostnader_percentage'] = 1
+            bedrift_pub['omsetning_percentage'] = 1
+
+            # rename variables
+
+            bedrift_pub.rename(columns={'ts_forbruk': 'forbruk', 'naring_f': 'nacef_5', 'orgnr_foretak': 'orgnr_n_1', 'ts_salgsint': 'salgsint', 'omsetning': 'foretak_omsetning', 'nopost_p4005': 'tmp_no_p4005', 'nopost_driftskostnader': 'foretak_driftskostnad', 'kommune': 'b_kommunenr', 'sysselsetting_syss': 'b_sysselsetting_syss', 'reg_type_f': 'regtype', 'naring': 'tmp_sn2007_5', 'orgnr_bedrift': 'v_orgnr'}, inplace=True)
+
+            bedrift_pub['gjeldende_omsetn_kr'] = bedrift_pub['foretak_omsetning']
+            bedrift_pub['omsetn_kr'] = bedrift_pub['foretak_omsetning']
+            bedrift_pub['new_oms'] = bedrift_pub['foretak_omsetning']
+            bedrift_pub['tot_oms_fordelt'] = bedrift_pub['foretak_omsetning']
+            bedrift_pub['driftskost_kr'] = bedrift_pub['foretak_driftskostnad']
+            bedrift_pub['gjeldende_driftsk_kr'] = bedrift_pub['foretak_driftskostnad']
+            bedrift_pub['tot_driftskost_fordelt'] = bedrift_pub['foretak_driftskostnad']
+            bedrift_pub['gjeldende_bdr_syss'] = bedrift_pub['b_sysselsetting_syss']
+            bedrift_pub['tmp_forbruk_bed'] = bedrift_pub['forbruk']
+            bedrift_pub['tmp_salgsint_bed'] = bedrift_pub['salgsint']
+            bedrift_pub['id'] = bedrift_pub['orgnr_n_1']
+            
+            fil_path = [
+                f
+                for f in fs.glob(
+                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{fjor}/statistikkfil_bedrifter_pub.parquet"
+                )
+                if f.endswith(".parquet")
+            ]
+
+            # Use the ParquetDataset to read multiple files
+            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            table = dataset.read()
+
+            # Convert to Pandas DataFrame
+            bedrift_pub_x = table.to_pandas()
+            
+            bedrift_pub_x.columns = bedrift_pub_x.columns.str.lower()
+
+            del dataset, table
+
+            bedrift_pub_x = bedrift_pub_x[bedrift_pub_x['reg_type_f'] == '01']
+
+
+            bedrift_pub_x = bedrift_pub_x[['orgnr_bedrift', 'sysselsetting_syss']]
+
+            bedrift_pub_x.rename(columns={'sysselsetting_syss': 'fjor_syssel_t1', 'orgnr_bedrift': 'v_orgnr'}, inplace=True)
+            
+            bedrift_pub = pd.merge(bedrift_pub, bedrift_pub_x, how='left', on='v_orgnr')
+
+
+            # fill nan for fjor_syssel_t1 with 0
+
+            bedrift_pub['fjor_syssel_t1'] = bedrift_pub['fjor_syssel_t1'].fillna(0)
+
+            del bedrift_pub_x
+
+            merged_df = pd.concat([merged_df, bedrift_pub])
+
+            del bedrift_pub
+        else:
+            print("uu_data is False, skipping data processing.")
         
         merged_df["n4"] = merged_df["nacef_5"].str[:5]
 
@@ -562,8 +640,8 @@ def main(year, limit, skjema_nr, distribtion_percent):
         general_inflation_rate = kpi.fetch_general_inflation_rate(current_year)
 
         # If fetching for the current year fails, try fetching for the previous year
-        if general_inflation_rate is None:
-            general_inflation_rate = kpi.fetch_general_inflation_rate(current_year - 1)
+        # if general_inflation_rate is None:
+        #     general_inflation_rate = kpi.fetch_general_inflation_rate(current_year - 1)
 
         # Fill missing inflation rate values with the fetched general inflation rate
         imputable_df["inflation_rate"] = imputable_df["inflation_rate"].fillna(general_inflation_rate)
@@ -802,6 +880,8 @@ def main(year, limit, skjema_nr, distribtion_percent):
         all_training_dataframes.append(training_data)
         all_time_series_dataframes.append(time_series_df)
         
+        print("finished collecting and cleaning data for year:", current_year)
+        
     # Concatenate all DataFrames into a single DataFrame
     training_data = pd.concat(all_training_dataframes, ignore_index=True)
     bad_data = pd.concat(all_bad_dataframes, ignore_index=True)
@@ -811,7 +891,7 @@ def main(year, limit, skjema_nr, distribtion_percent):
     current_year_good_oms = good_data[good_data['year'] == year]
     current_year_bad_oms = bad_data[bad_data['year'] == year]
     v_orgnr_list_for_imputering = current_year_bad_oms['v_orgnr'].tolist()
-    unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith('68')]['id'].unique().tolist()   
+    unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith(tosiffernaring)]['id'].unique().tolist()   
     
     # Easy solution for filling Nan Values - only for training, not for editing real data
     training_data['tmp_sn2007_5'].fillna(training_data['nacef_5'], inplace=True)
@@ -822,6 +902,7 @@ def main(year, limit, skjema_nr, distribtion_percent):
     
     # Create trend data
     
+    print("starting regression line function")
     # Determine the number of CPU cores available
     num_cores = multiprocessing.cpu_count()
     print(f"Number of CPU cores available: {num_cores}")
@@ -920,70 +1001,77 @@ def main(year, limit, skjema_nr, distribtion_percent):
 
     # Add geographical data:
     
-    current_date = datetime.datetime.now()
+    def geo(training_data):
+        current_date = datetime.datetime.now()
 
-    # Format the year and month
-    current_year = current_date.strftime("%Y")
-    current_year_int = int(current_date.strftime("%Y"))
-    current_month = current_date.strftime("%m")
+        # Format the year and month
+        current_year = current_date.strftime("%Y")
+        current_year_int = int(current_date.strftime("%Y"))
+        current_month = current_date.strftime("%m")
 
-    # Subtract one day from the first day of the current month to get the last day of the previous month
-    last_day_of_previous_month = datetime.datetime(
-        current_date.year, current_date.month, 1
-    ) - datetime.timedelta(days=1)
+        # Subtract one day from the first day of the current month to get the last day of the previous month
+        last_day_of_previous_month = datetime.datetime(
+            current_date.year, current_date.month, 1
+        ) - datetime.timedelta(days=1)
 
-    # Now we can get the month number of the previous month
-    previous_month = last_day_of_previous_month.strftime("%m")
+        # Now we can get the month number of the previous month
+        previous_month = last_day_of_previous_month.strftime("%m")
 
-    VOFSTI = "ssb-vof-data-delt-stedfesting-prod/klargjorte-data/parquet"
+        VOFSTI = "ssb-vof-data-delt-stedfesting-prod/klargjorte-data/parquet"
 
+        if geo_data == 'Yes':
+            dataframes = []
 
-    dataframes = []
+            for year in range(2017, current_year_int + 1):
+                file_path = f"{VOFSTI}/stedfesting-situasjonsuttak_p{year}-{previous_month}_v1.parquet"
 
-    for year in range(2017, current_year_int + 1):
+                vof_df = dp.read_pandas(f"{file_path}")
+                vof_gdf = gpd.GeoDataFrame(
+                    vof_df,
+                    geometry=gpd.points_from_xy(
+                        vof_df["y_koordinat"],
+                        vof_df["x_koordinat"],
+                    ),
+                    crs=25833,
+                )
 
-        file_path = f"{VOFSTI}/stedfesting-situasjonsuttak_p{year}-{previous_month}_v1.parquet"
+                vof_gdf = vof_gdf.rename(
+                    columns={
+                        "orgnrbed": "v_orgnr",
+                        "org_nr": "orgnr_foretak",
+                        "nace1_sn07": "naring",
+                    }
+                )
 
+                vof_gdf = vof_gdf[
+                    [
+                        "v_orgnr",
+                        "orgnr_foretak",
+                        "naring",
+                        "x_koordinat",
+                        "y_koordinat",
+                        "rute_100m",
+                        "rute_1000m",
+                        "geometry",
+                    ]
+                ]
 
-        vof_df = dp.read_pandas(f"{file_path}")
-        vof_gdf = gpd.GeoDataFrame(
-            vof_df,
-            geometry=gpd.points_from_xy(
-                vof_df["y_koordinat"],
-                vof_df["x_koordinat"],
-            ),
-            crs=25833,
-        )
+                dataframes.append(vof_gdf)
 
-        vof_gdf = vof_gdf.rename(
-            columns={
-                "orgnrbed": "v_orgnr",
-                "org_nr": "orgnr_foretak",
-                "nace1_sn07": "naring",
-            }
-        )
+            combined_gdf = pd.concat(dataframes, ignore_index=True)
 
-        vof_gdf = vof_gdf[
-            [
-                "v_orgnr",
-                "orgnr_foretak",
-                "naring",
-                "x_koordinat",
-                "y_koordinat",
-                "rute_100m",
-                "rute_1000m",
-                "geometry",
-            ]
-        ]
+            # Drop duplicate rows in the combined DataFrame
+            combined_gdf = combined_gdf.drop_duplicates()
 
-        dataframes.append(vof_gdf)
+            # Merge with training_data
+            training_data = pd.merge(training_data, combined_gdf, on="v_orgnr", how="left")
+            
+            return training_data
+        
+    if geo_data:
+        print("collecting geodata")
+        training_data = geo(training_data)
 
-    combined_gdf = pd.concat(dataframes, ignore_index=True)
-
-    # Drop duplicate rows in the combined DataFrame
-    combined_gdf = combined_gdf.drop_duplicates()
-
-    training_data = pd.merge(training_data, combined_gdf, on="v_orgnr", how="left")
     
     temp = training_data.copy()
     
@@ -992,15 +1080,7 @@ def main(year, limit, skjema_nr, distribtion_percent):
     merging_df = current_year_bad_oms[['v_orgnr', 'id', 'year', 'lopenr']]
 
     imputatable_df = pd.merge(merging_df, temp, on=['v_orgnr', 'id', 'year'], how='left')
-    
-    test4 = imputatable_df.copy()
       
     training_data = training_data[~training_data['v_orgnr'].isin(v_orgnr_list_for_imputering)]
     
-    test5 = current_year_good_oms.copy()
-    
-    test6 = current_year_bad_oms.copy()
-    
-    test7 = training_data.copy()
-
     return current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list

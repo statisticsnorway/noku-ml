@@ -156,6 +156,8 @@ def xgboost_model(training_df, scaler, df_estimeres, GridSearch=True):
     from sklearn.compose import ColumnTransformer
     import matplotlib.pyplot as plt
     import shap
+    
+    print('starting ml modell. Cleaning data')
 
     # Make copies of the input DataFrames
     df = training_df.copy()
@@ -572,6 +574,7 @@ def knn_model(training_df, scaler, df_estimeres, GridSearch=True):
     imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
     
     return imputed_df
+
 
 def knn_model_new(training_df, scaler, df_estimeres, current_year, GridSearch=True):
     import numpy as np

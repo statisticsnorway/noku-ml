@@ -67,12 +67,14 @@ import create_datafiles
 
 
 
-def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distribtion_percent, GridSearch=False):
+def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distribtion_percent, rerun_ml=False, geo_data=False, uu_data=False, GridSearch=False):
 
     start_time = time.time()
-
+    
+    print('starting to collect data')
+    
     # Generate the data required for processing using the create_datafiles.main function
-    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list = create_datafiles.main(year, rate, skjema, distribtion_percent)
+    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list = create_datafiles.main(year, rate, skjema, distribtion_percent, tosiffernaring, geo_data=geo_data, uu_data=uu_data)
 
     # Construct the function name dynamically based on the model parameter
     function_name = f"{model}"
@@ -82,14 +84,45 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
 
     # Call the retrieved function with the training data, scaler, imputatable DataFrame, and GridSearch parameter
     # Check if the model is 'nn_model' and set additional parameters if true
-    if model == 'nn_model':
-        epochs_number = 200
-        batch_size = 500
-        # Call the function with the additional parameters
-        imputed_df = function_to_call(training_data, scaler, epochs_number, batch_size, imputatable_df, GridSearch=GridSearch)
+    if rerun_ml:
+        
+        print("finished creating training data, starting machine learning model")
+        
+        if model == 'nn_model':
+            epochs_number = 200
+            batch_size = 500
+            # Call the function with the additional parameters
+            imputed_df = function_to_call(training_data, scaler, epochs_number, batch_size, imputatable_df, GridSearch=GridSearch)
+        else:
+            # Call the function without the additional parameters
+            imputed_df = function_to_call(training_data, scaler, imputatable_df, GridSearch=GridSearch)
+
+        imputed_df.to_parquet(
+            f"gs://ssb-prod-noeku-data-produkt/temp/imputed_skjema_data/imputed_{tosiffernaring}_{skjema}_{year}_{model}.parquet",
+            storage_options={"token": AuthClient.fetch_google_credentials()},
+        )
+
+        print("finsihed machine learning model training, starting final treatment of update file")
     else:
-        # Call the function without the additional parameters
-        imputed_df = function_to_call(training_data, scaler, imputatable_df, GridSearch=GridSearch)
+        print('not rerunning ml model, read in data from GCP file path')
+
+        fil_path = [
+            f
+            for f in fs.glob(
+                f"gs://ssb-prod-noeku-data-produkt/temp/imputed_skjema_data/imputed_{tosiffernaring}_{skjema}_{year}_{model}.parquet"
+            )
+            if f.endswith(".parquet")
+        ]
+
+        # Use the ParquetDataset to read multiple files
+        dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+
+        table = dataset.read()
+
+        # Convert to Pandas DataFrame
+        imputed_df = table.to_pandas()
+        del dataset, table
+        
 
     # Extract the relevant columns from the imputed DataFrame for merging
     df_to_merge = imputed_df[['v_orgnr', 'year', 'id', 'predicted_oms']]
