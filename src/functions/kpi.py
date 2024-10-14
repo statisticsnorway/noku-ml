@@ -472,3 +472,45 @@ def process_kpi_data(year):
     kpi_df.rename(columns={"value": "inflation_rate", "konsumgrp": "n4"}, inplace=True)
 
     return kpi_df
+
+
+
+def fetch_general_inflation_rate(year):
+    POST_URL = "https://data.ssb.no/api/v0/no/table/03013/"
+    bef_kom = {
+        "query": [
+            {
+                "code": "Konsumgrp",
+                "selection": {"filter": "vs:CoiCop2016niva1", "values": []},
+            },
+            {
+                "code": "ContentsCode",
+                "selection": {"filter": "item", "values": ["Tolvmanedersendring"]},
+            },
+            {
+                "code": "Tid",
+                "selection": {"filter": "item", "values": [str(year) + "M12"]},
+            },
+        ],
+        "response": {"format": "json-stat2"},
+    }
+
+    # Behandler spørringen
+    resultat1 = requests.post(POST_URL, json=bef_kom)
+
+    # Check if request was successful
+    if resultat1.status_code == 200:
+        from pyjstat import pyjstat
+
+        # Convert JSON response to DataFrame
+        dataset1 = pyjstat.Dataset.read(resultat1.text)
+        df_temp = dataset1.write("dataframe")
+
+        # Extract value from the DataFrame (the inflation rate)
+        value = df_temp.iloc[0]["value"]
+
+        # Return the value as the general inflation rate
+        return value
+    else:
+        print("Failed to retrieve data:", resultat1.status_code)
+        return None
