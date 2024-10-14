@@ -67,7 +67,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
         fil_path = [
             f
             for f in fs.glob(
-                f"gs://ssb-prod-noeku-data-produkt/eimerdb/nokubasen/skjemadata/aar={current_year}/skjema={skjema_list}/*"
+                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/skjemadata/skjema={skjema_list}/aar={current_year}/*"
             )
             if f.endswith(".parquet")
         ]
@@ -149,7 +149,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             fil_path = [
                 f
                 for f in fs.glob(
-                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{current_year}/statistikkfil_foretak_pub.parquet"
+                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={current_year}/statistikkfil_foretak_pub.parquet"
                 )
                 if f.endswith(".parquet")
             ]
@@ -185,7 +185,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             fil_path = [
                 f
                 for f in fs.glob(
-                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{current_year}/statistikkfil_foretak_pub.parquet"
+                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={current_year}/statistikkfil_foretak_pub.parquet"
                 )
                 if f.endswith(".parquet")
             ]
@@ -213,7 +213,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             fil_path = [
                 f
                 for f in fs.glob(
-                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{fjor}/statistikkfil_bedrifter_pub.parquet"
+                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={fjor}/statistikkfil_bedrifter_pub.parquet"
                 )
                 if f.endswith(".parquet")
             ]
@@ -469,7 +469,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             fil_path = [
                 f
                 for f in fs.glob(
-                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{year}/statistikkfil_bedrifter_pub.parquet"
+                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={year}/statistikkfil_bedrifter_pub.parquet"
                 )
                 if f.endswith(".parquet")
             ]
@@ -516,7 +516,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             fil_path = [
                 f
                 for f in fs.glob(
-                    f"gs://ssb-prod-noeku-data-produkt/statistikkfiler/g{fjor}/statistikkfil_bedrifter_pub.parquet"
+                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={fjor}/statistikkfil_bedrifter_pub.parquet"
                 )
                 if f.endswith(".parquet")
             ]

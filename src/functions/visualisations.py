@@ -49,7 +49,7 @@ warnings.filterwarnings("ignore")
 def gather_visualisation_data(year):
 
     # Fetch and process time series data similar to the steps above
-    fil_path = [f for f in fs.glob(f"gs://ssb-prod-noeku-data-produkt/temp/timeseries_knn.parquet") if f.endswith(".parquet")]
+    fil_path = [f for f in fs.glob(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/statistikk/visualisering/timeseries_knn.parquet") if f.endswith(".parquet")]
     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
     table = dataset.read()
     timeseries_knn_agg = table.to_pandas()
@@ -58,7 +58,7 @@ def gather_visualisation_data(year):
     timeseries_knn_agg['oms_pr_syss'] = timeseries_knn_agg['oms'] / timeseries_knn_agg['syss']
 
     # Repeat for other data sources
-    fil_path = [f for f in fs.glob(f"gs://ssb-prod-noeku-data-produkt/temp/knn_varehandel_cleaned.parquet") if f.endswith(".parquet")]
+    fil_path = [f for f in fs.glob(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/statistikk/visualisering/knn_varehandel_cleaned.parquet") if f.endswith(".parquet")]
     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
     table = dataset.read()
     knn_data = table.to_pandas()
@@ -69,7 +69,7 @@ def gather_visualisation_data(year):
     histogram_data = histogram_data[(histogram_data['n2'] == '45') | (histogram_data['n2'] == '46') | (histogram_data['n2'] == '47')]
 
     # Fetch and process municipality level time series data
-    fil_path = [f for f in fs.glob(f"gs://ssb-prod-noeku-data-produkt/temp/timeseries_knn_kommune.parquet") if f.endswith(".parquet")]
+    fil_path = [f for f in fs.glob(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/statistikk/visualisering/timeseries_knn_kommune.parquet") if f.endswith(".parquet")]
     dataset = pq.ParquetDataset(fil_path, filesystem=fs)
     table = dataset.read()
     timeseries_knn_kommune = table.to_pandas()

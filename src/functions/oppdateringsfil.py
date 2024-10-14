@@ -95,10 +95,10 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
             imputed_df = function_to_call(training_data, scaler, epochs_number, batch_size, imputatable_df, GridSearch=GridSearch)
         else:
             # Call the function without the additional parameters
-            imputed_df = function_to_call(training_data, scaler, imputatable_df, GridSearch=GridSearch)
+            imputed_df = function_to_call(training_data, scaler, imputatable_df, year, GridSearch=GridSearch)
 
         imputed_df.to_parquet(
-            f"gs://ssb-prod-noeku-data-produkt/temp/imputed_skjema_data/imputed_{tosiffernaring}_{skjema}_{year}_{model}.parquet",
+            f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet",
             storage_options={"token": AuthClient.fetch_google_credentials()},
         )
 
@@ -109,7 +109,7 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
         fil_path = [
             f
             for f in fs.glob(
-                f"gs://ssb-prod-noeku-data-produkt/temp/imputed_skjema_data/imputed_{tosiffernaring}_{skjema}_{year}_{model}.parquet"
+                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet""
             )
             if f.endswith(".parquet")
         ]
