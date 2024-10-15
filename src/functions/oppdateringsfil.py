@@ -109,7 +109,7 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
         fil_path = [
             f
             for f in fs.glob(
-                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet""
+                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet"
             )
             if f.endswith(".parquet")
         ]

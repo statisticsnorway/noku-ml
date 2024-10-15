@@ -508,6 +508,15 @@ def knn_model(training_df, scaler, df_estimeres, year, GridSearch=True):
     print("R-squared:", r_squared)
     print("Mean Absolute Error:", mae)
     
+    # Calculate MAE per year and print it
+    results = X_test.copy()
+    results['actual'] = y_test
+    results['predicted'] = y_pred
+    if 'year' in results.columns:
+        mae_per_year = results.groupby('year').apply(lambda group: mean_absolute_error(group['actual'], group['predicted']))
+        print("\nMean Absolute Error per Year:")
+        print(mae_per_year)
+    
     # Create the n3 class by taking the first 4 characters of nacef_5
     X_test['n3'] = X_test['nacef_5'].str[:4]
     
@@ -853,6 +862,8 @@ def knn_model_filtered_for_current_year(training_df, scaler, df_estimeres, year,
     # Make copies of the input DataFrames
     df = training_df.copy()
     imputed_df = df_estimeres.copy()
+    
+    df = df[df['year'] == year]
     
     categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
     df[categorical_columns] = df[categorical_columns].astype(str)

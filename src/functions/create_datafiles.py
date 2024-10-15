@@ -50,7 +50,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     # else:
     #     start_year = 2017
     
-    start_year = 2018
+    start_year = 2017
 
     all_good_dataframes = []  # List to store good dataframes for each year
     all_bad_dataframes = []   # List to store bad dataframes for each year
@@ -69,7 +69,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             for f in fs.glob(
                 f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/skjemadata/skjema={skjema_list}/aar={current_year}/*"
             )
-            if f.endswith(".parquet")
+            # if f.endswith(".parquet")
         ]
 
         # Assuming there's only one file in fil_path
@@ -77,6 +77,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             skjema = pd.read_parquet(fil_path[0], filesystem=fs)
         else:
             raise FileNotFoundError(f"No Parquet files found for year {current_year}")
+            print(fil_path)
                
         felt_id_values = [
             "V_ORGNR",
@@ -263,56 +264,77 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
                 "orgnr_n_1",
                 "salgsint",
                 "tmp_driftskostnad_9010",
-                "tmp_driftskostnad_9910",
+                # "tmp_driftskostnad_9910",
                 "tmp_no_omsetn",
                 "tmp_no_p4005",
             ]
 
         foretak = foretak[selected_columns]
+        
+        nacef_prefix_list = foretak['nacef_5'].str[:2].unique().tolist()
+
+        # Display the list
+        print(nacef_prefix_list)
 
         # Assuming 'foretak' is your DataFrame
         foretak.rename(columns={"tmp_no_omsetn": "foretak_omsetning"}, inplace=True)
 
 
         foretak = foretak.fillna(0)
+        
+        # Apply numeric conversion and find max for tmp_driftskostnad_9010 only
+        foretak["tmp_driftskostnad_9010"] = pd.to_numeric(foretak["tmp_driftskostnad_9010"], errors="coerce")
+        foretak["foretak_driftskostnad"] = foretak["tmp_driftskostnad_9010"]
 
-        if current_year >= 2022:
-            # Apply numeric conversion and find max for tmp_driftskostnad_9010 only
-            foretak["tmp_driftskostnad_9010"] = pd.to_numeric(foretak["tmp_driftskostnad_9010"], errors="coerce")
-            foretak["foretak_driftskostnad"] = foretak["tmp_driftskostnad_9010"]
+        # Drop the specified column
+        foretak.drop(["tmp_driftskostnad_9010"], axis=1, inplace=True)
 
-            # Drop the specified column
-            foretak.drop(["tmp_driftskostnad_9010"], axis=1, inplace=True)
+        columns_to_drop = [
+            "forbruk",
+            "nacef_5",
+            "orgnr_n_1",
+            "salgsint",
+            "tmp_no_omsetn",
+            "tmp_no_p4005",
+        ]
 
-            columns_to_drop = [
-                "forbruk",
-                "nacef_5",
-                "orgnr_n_1",
-                "salgsint",
-                "tmp_no_omsetn",
-                "tmp_no_p4005",
-            ]
-        else:
-            # Apply numeric conversion and find max for both columns
-            foretak[["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]] = foretak[
-                ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
-            ].apply(pd.to_numeric, errors="coerce")
+#         if current_year >= 2022:
+#             # Apply numeric conversion and find max for tmp_driftskostnad_9010 only
+#             foretak["tmp_driftskostnad_9010"] = pd.to_numeric(foretak["tmp_driftskostnad_9010"], errors="coerce")
+#             foretak["foretak_driftskostnad"] = foretak["tmp_driftskostnad_9010"]
 
-            foretak["foretak_driftskostnad"] = foretak[
-                ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
-            ].max(axis=1)
+#             # Drop the specified column
+#             foretak.drop(["tmp_driftskostnad_9010"], axis=1, inplace=True)
 
-            # Drop the specified columns
-            foretak.drop(["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"], axis=1, inplace=True)
+#             columns_to_drop = [
+#                 "forbruk",
+#                 "nacef_5",
+#                 "orgnr_n_1",
+#                 "salgsint",
+#                 "tmp_no_omsetn",
+#                 "tmp_no_p4005",
+#             ]
+#         else:
+#             # Apply numeric conversion and find max for both columns
+#             foretak[["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]] = foretak[
+#                 ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
+#             ].apply(pd.to_numeric, errors="coerce")
 
-            columns_to_drop = [
-                "forbruk",
-                "nacef_5",
-                "orgnr_n_1",
-                "salgsint",
-                "tmp_no_omsetn",
-                "tmp_no_p4005",
-            ]
+#             foretak["foretak_driftskostnad"] = foretak[
+#                 ["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"]
+#             ].max(axis=1)
+
+#             # Drop the specified columns
+#             foretak.drop(["tmp_driftskostnad_9010", "tmp_driftskostnad_9910"], axis=1, inplace=True)
+
+#             columns_to_drop = [
+#                 "forbruk",
+#                 "nacef_5",
+#                 "orgnr_n_1",
+#                 "salgsint",
+#                 "tmp_no_omsetn",
+#                 "tmp_no_p4005",
+#             ]
 
 
         bedrift.drop(columns_to_drop, axis=1, inplace=True)
@@ -462,9 +484,9 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
         del onlygooddriftskostnader
                  
-        if uu_data:
+        if uu_data and current_year == year:
             
-            print("uu_data is True, proceeding with data processing...")
+            print("uu_data for:", {current_year}, "is True, proceeding with data processing...")
             
             fil_path = [
                 f
@@ -545,10 +567,21 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             # fill nan for fjor_syssel_t1 with 0
 
             bedrift_pub['fjor_syssel_t1'] = bedrift_pub['fjor_syssel_t1'].fillna(0)
+            
+            bedrift_pub['temp_n2'] = bedrift_pub['nacef_5'].str[:2]
+            
+            print("uu data shape before filtering",bedrift_pub.shape)
+            
+            bedrift_pub = bedrift_pub[bedrift_pub['temp_n2'].isin(nacef_prefix_list)]
+            
+            bedrift_pub = bedrift_pub.drop(columns=['temp_n2'])
+            
+            print("uu data shape after filtering",bedrift_pub.shape)
 
             del bedrift_pub_x
 
             merged_df = pd.concat([merged_df, bedrift_pub])
+            
 
             del bedrift_pub
         else:
