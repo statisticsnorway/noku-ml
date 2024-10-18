@@ -1,4 +1,4 @@
-# noku_ml
+# noku-ml
 
 Norsk versjon:
 
@@ -10,9 +10,13 @@ The main problem being solved, is inaccuarte/low quality responses being deliver
 
 Results: A full production run (normally completed by a team of 5-7 people over an entire year) completed in 600.38 seconds. Results pass several logical tests and when backtested against former productions compares very favorably. The r^2 when comparing what this program produces against what was actually published was approx 98% with a mean absolute error of approx 5.000 nok - which is low given the characteristics of our data. 
 
+This repo will also act as a one stop shop for method testing and ml solution devlopment for statistics relating to NØKU. Relevant ReadMe files will be added in the folders other codes are saved in. 
+
 Feel free to clone the repo if you have appropriate access. I will also demonstrate what the code is doing here in this ReadMe file:
 
 ## Visualisations:
+
+Visualisations seen here in this README file are for data already published, and has had noise added in order to protect confidentiality. The visuals here simply demonstrate how the code functions. 
 
 Several visualisations are used to analyse the data on an industry level. The plots are interactive, the user can select years, chart-types, focus variables etc. All of the regular plotly interactive tools are available as well. Some visualisations are animated and if the user presses play, they will see changes overtime. Here are what some of the outputs look like (which would naturally adjust if something different was selected in the dropdown menus. 
 
@@ -173,10 +177,6 @@ Models can always be improved. With more resources, particularly time, it may be
 <img width="314" alt="Classification 2" src="https://github.com/user-attachments/assets/e1800742-becd-45b3-b725-01519c6312dc">
 
 
-
-## Contributers to the project:
-
-<img width="716" alt="contributions" src="https://github.com/user-attachments/assets/7208d70e-c47e-4c16-8ae1-8e51a43b516a">
 
 
 
