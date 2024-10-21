@@ -1,4 +1,4 @@
-# noku_ml
+# noku-ml
 
 engelsk versjon:
 
@@ -8,9 +8,13 @@ Hovedproblemet som løses, er unøyaktige/lavkvalitets svar levert av respondent
 
 Resultater: En full produksjonskjøring (normalt fullført av et team på 5-7 personer over et helt år) fullført på 600,38 sekunder. Resultatene passerer flere logiske tester og sammenlignet med tidligere produksjoner viser de seg å være svært gunstige. R^2 når man sammenligner det dette programmet produserer mot det som faktisk ble publisert var omtrent 98% med en gjennomsnittlig absolutt feil på omtrent 5.000 NOK - noe som er lavt gitt egenskapene til våre data.
 
+Dette repositoriet vil også fungere som en alt-i-ett butikk for metodetesting og utvikling av maskinlæringsløsninger for statistikk relatert til NØKU. Relevante ReadMe-filer vil bli lagt til i mappene der andre koder er lagret.
+
 Føl deg fri til å klone repoet hvis du har passende tilgang. Jeg vil også demonstrere hva koden gjør her i denne ReadMe-filen:
 
 ## Visualiseringer:
+
+Visualiseringene som sees her i denne README-filen er for data som allerede er publisert, og det har blitt lagt til støy for å beskytte konfidensialitet. De visuelle elementene her demonstrerer rett og slett hvordan koden fungerer.
 
 Flere visualiseringer brukes til å analysere dataene på industrinivå. Plottene er interaktive, brukeren kan velge år, diagramtyper, fokusvariabler osv. Alle de vanlige interaktive verktøyene fra Plotly er også tilgjengelige. Noen visualiseringer er animerte, og hvis brukeren trykker på spill av, vil de se endringer over tid. Her er hvordan noen av resultatene ser ut (som naturligvis vil justere seg hvis noe annet ble valgt i rullegardinmenyene).
 

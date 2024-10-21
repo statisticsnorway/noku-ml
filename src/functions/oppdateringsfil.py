@@ -67,12 +67,14 @@ import create_datafiles
 
 
 
-def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
+def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distribtion_percent, rerun_ml=False, geo_data=False, uu_data=False, GridSearch=False):
 
     start_time = time.time()
-
+    
+    print('starting to collect data')
+    
     # Generate the data required for processing using the create_datafiles.main function
-    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df = create_datafiles.main(year, rate)
+    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list = create_datafiles.main(year, rate, skjema, distribtion_percent, tosiffernaring, geo_data=geo_data, uu_data=uu_data)
 
     # Construct the function name dynamically based on the model parameter
     function_name = f"{model}"
@@ -82,17 +84,50 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
 
     # Call the retrieved function with the training data, scaler, imputatable DataFrame, and GridSearch parameter
     # Check if the model is 'nn_model' and set additional parameters if true
-    if model == 'nn_model':
-        epochs_number = 200
-        batch_size = 500
-        # Call the function with the additional parameters
-        imputed_df = function_to_call(training_data, scaler, epochs_number, batch_size, imputatable_df, GridSearch=GridSearch)
+    if rerun_ml:
+        
+        print("finished creating training data, starting machine learning model")
+        
+        if model == 'nn_model':
+            epochs_number = 200
+            batch_size = 500
+            # Call the function with the additional parameters
+            imputed_df = function_to_call(training_data, scaler, epochs_number, batch_size, imputatable_df, GridSearch=GridSearch)
+        else:
+            # Call the function without the additional parameters
+            imputed_df = function_to_call(training_data, scaler, imputatable_df, year, GridSearch=GridSearch)
+
+        imputed_df.to_parquet(
+            f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet",
+            storage_options={"token": AuthClient.fetch_google_credentials()},
+        )
+
+        print("finsihed machine learning model training, starting final treatment of update file")
     else:
-        # Call the function without the additional parameters
-        imputed_df = function_to_call(training_data, scaler, imputatable_df, GridSearch=GridSearch)
+        print('not rerunning ml model, read in data from GCP file path')
+
+        fil_path = [
+            f
+            for f in fs.glob(
+                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet"
+            )
+            if f.endswith(".parquet")
+        ]
+
+        # Use the ParquetDataset to read multiple files
+        dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+
+        table = dataset.read()
+
+        # Convert to Pandas DataFrame
+        imputed_df = table.to_pandas()
+        del dataset, table
+        
 
     # Extract the relevant columns from the imputed DataFrame for merging
     df_to_merge = imputed_df[['v_orgnr', 'year', 'id', 'predicted_oms']]
+    
+    test8 = imputed_df.copy()
 
     # Merge the imputed DataFrame with the current year's bad data on 'v_orgnr', 'id', and 'year'
     bad_df = pd.merge(current_year_bad_oms, df_to_merge, on=['v_orgnr', 'id', 'year'], how='left')
@@ -104,13 +139,53 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
     bad_df.drop(['predicted_oms'], axis=1, inplace=True)
 
     # Concatenate the good data and the modified bad data into a single DataFrame
-    good_df = pd.concat([current_year_good_oms, bad_df], ignore_index=True)
+    # good_df = pd.concat([current_year_good_oms, bad_df], ignore_index=True)
+    
+    # Print shapes before filtering
+    print("Shapes before filtering:")
+    print(f"current_year_good_oms: {current_year_good_oms.shape}")
+    print(f"bad_df: {bad_df.shape}")
+
+    # Remove rows from current_year_good_oms where 'id' appears in bad_df
+    filtered_good_df = current_year_good_oms[~current_year_good_oms['id'].isin(bad_df['id'])]
+
+    # Combine the filtered current_year_good_oms and bad_df
+    good_df = pd.concat([filtered_good_df, bad_df], ignore_index=True)
+
+    # Print shapes after filtering
+    print("\nShapes after filtering:")
+    print(f"filtered_good_df: {filtered_good_df.shape}")
+    print(f"bad_df: {bad_df.shape}")
+    print(f"good_df (after concatenation): {good_df.shape}")
+
+    
+    # Copy good_df to return a copy of imputed numbers pre-AO treatment. Can use AO program in prodsone to save time. 
+    
+    raw_oms_df = good_df.copy()
 
     # Filter the DataFrame to include only rows where 'lopenr' equals 1
     good_df = good_df[good_df['lopenr'] == 1]
 
     # Ensure that 'new_oms' values are non-negative
     good_df['new_oms'] = good_df['new_oms'].apply(lambda x: 0 if x < 0 else x)
+    
+    # calculate profit margin in order to fill NaN values for driftskostnader
+    good_df['inverse_profit_margin'] = good_df['foretak_driftskostnad'] / good_df['foretak_omsetning']
+    
+
+    # fill Nan
+    good_df['inverse_profit_margin'] = good_df['inverse_profit_margin'].replace([np.inf, -np.inf], np.nan)  # Replace inf and -inf with NaN
+    good_df['inverse_profit_margin'] = good_df['inverse_profit_margin'].fillna(0)  # Replace NaN with 0
+    
+    # fill NaN values (impute bad driftskostnader using profit margin)
+    
+    good_df['gjeldende_driftsk_kr'] = good_df['gjeldende_driftsk_kr'].fillna(good_df['inverse_profit_margin'] * good_df['new_oms'])
+    
+    # fill Nan
+    good_df['gjeldende_driftsk_kr'] = good_df['gjeldende_driftsk_kr'].replace([np.inf, -np.inf], np.nan)  # Replace inf and -inf with NaN
+    good_df['gjeldende_driftsk_kr'] = good_df['gjeldende_driftsk_kr'].fillna(0)  # Replace NaN with 0
+
+
 
     # Drop the 'tot_oms_fordelt' column as it will be recalculated
     good_df.drop(['tot_oms_fordelt'], axis=1, inplace=True)
@@ -123,15 +198,32 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
 
     # Merge the grouped DataFrame back into the original DataFrame on 'id'
     good_df = pd.merge(good_df, grouped, on="id", how="left")
+    
+    # Replace commas with periods in the 'forbruk' column, convert to float, and round to 0 decimal places
+    good_df['forbruk'] = good_df['forbruk'].str.replace(',', '.').astype(float).round(0)
+
+    # Do the same for the 'salgsint' and 'tmp_no_p4005' columns if needed
+    good_df['salgsint'] = good_df['salgsint'].str.replace(',', '.').astype(float).round(0)
+    # good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].str.replace(',', '.').astype(float).round(0)
+    
+    # Check if 'tmp_no_p4005' is of object type (i.e., string-like)
+    if good_df['tmp_no_p4005'].dtype == 'object':
+        # Perform string replacement only if the column contains strings
+        good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].str.replace(',', '.').astype(float).round(0)
+    else:
+        # If it's already numeric, just ensure it's float and rounded
+        good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].astype(float).round(0)
+
+
 
     # Convert necessary columns to appropriate data types
     good_df['id'] = good_df['id'].astype(str)
     good_df['nacef_5'] = good_df['nacef_5'].astype(str)
     good_df['orgnr_n_1'] = good_df['orgnr_n_1'].astype(str)
     good_df['b_kommunenr'] = good_df['b_kommunenr'].astype(str)
-    good_df['forbruk'] = good_df['forbruk'].astype(float)
-    good_df['salgsint'] = good_df['salgsint'].astype(float)
-    good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].astype(float)
+    # good_df['forbruk'] = good_df['forbruk'].astype(float)
+    # good_df['salgsint'] = good_df['salgsint'].astype(float)
+    # good_df['tmp_no_p4005'] = good_df['tmp_no_p4005'].astype(float)
 
     
    
@@ -725,148 +817,336 @@ def create_bedrift_fil(year, model, rate, scaler, GridSearch=False):
     check_manually = merged_df[~mask]
 
     # Update 'merged_df' to keep only the rows where the absolute value of 'drkost_diff' is <= 1000
-    merged_df = merged_df[mask]
+    # merged_df = merged_df[mask]
 
     # Create a copy of 'merged_df' to 'oppdateringsfil'
-    oppdateringsfil = merged_df.copy()
+    oppdateringsfil = temp.copy()
 
-    # Extract 'n3' and 'n2' from 'tmp_sn2007_5' in 'time_series_df'
-    time_series_df["n3"] = time_series_df["tmp_sn2007_5"].str[:4]
-    time_series_df["n2"] = time_series_df["tmp_sn2007_5"].str[:2]
+#     # Extract 'n3' and 'n2' from 'tmp_sn2007_5' in 'time_series_df'
+#     time_series_df["n3"] = time_series_df["tmp_sn2007_5"].str[:4]
+#     time_series_df["n2"] = time_series_df["tmp_sn2007_5"].str[:2]
 
-    # Extract 'n2' from 'tmp_sn2007_5' in 'merged_df'
-    merged_df["n2"] = merged_df["tmp_sn2007_5"].str[:2]
+#     # Extract 'n2' from 'tmp_sn2007_5' in 'merged_df'
+#     merged_df["n2"] = merged_df["tmp_sn2007_5"].str[:2]
 
-    # Select specific columns for 'temp_1' from 'time_series_df'
-    temp_1 = time_series_df[['id',
-                             'nacef_5',
-                             'orgnr_n_1',
-                             'b_sysselsetting_syss',
-                             'b_kommunenr',
-                             'gjeldende_lonn_kr', 
-                             'gjeldende_driftsk_kr',
-                             'gjeldende_omsetn_kr',
-                             'tmp_forbruk_bed',
-                             'tmp_salgsint_bed',
-                             'tmp_sn2007_5',
-                             'n3',
-                             'n2',
-                             'year']]
+#     # Select specific columns for 'temp_1' from 'time_series_df'
+#     temp_1 = time_series_df[['id',
+#                              'nacef_5',
+#                              'orgnr_n_1',
+#                              'b_sysselsetting_syss',
+#                              'b_kommunenr',
+#                              'gjeldende_lonn_kr', 
+#                              'gjeldende_driftsk_kr',
+#                              'gjeldende_omsetn_kr',
+#                              'tmp_forbruk_bed',
+#                              'tmp_salgsint_bed',
+#                              'tmp_sn2007_5',
+#                              'n3',
+#                              'n2',
+#                              'year']]
 
-    # Rename columns in 'temp_1'
-    temp_1 = temp_1.rename(columns={'b_sysselsetting_syss':'syss',
-                                    'b_kommunenr':'kommunenr',
-                                    'gjeldende_lonn_kr':'lonn',
-                                    'gjeldende_omsetn_kr':'oms',
-                                    'gjeldende_driftsk_kr': 'drkost',
-                                    'tmp_forbruk_bed':'forbruk',
-                                    'tmp_salgsint_bed':'salgsint',
-                                   })
+#     # Rename columns in 'temp_1'
+#     temp_1 = temp_1.rename(columns={'b_sysselsetting_syss':'syss',
+#                                     'b_kommunenr':'kommunenr',
+#                                     'gjeldende_lonn_kr':'lonn',
+#                                     'gjeldende_omsetn_kr':'oms',
+#                                     'gjeldende_driftsk_kr': 'drkost',
+#                                     'tmp_forbruk_bed':'forbruk',
+#                                     'tmp_salgsint_bed':'salgsint',
+#                                    })
 
-    # Filter out the current year from 'temp_1'
-    temp_1 = temp_1[temp_1['year'] != year]
+#     # Filter out the current year from 'temp_1'
+#     temp_1 = temp_1[temp_1['year'] != year]
 
-    # Extract 'n3' and 'n2' from 'tmp_sn2007_5' in 'merged_df'
-    merged_df["n3"] = merged_df["tmp_sn2007_5"].str[:4]
-    merged_df["n2"] = merged_df["tmp_sn2007_5"].str[:2]
+#     # Extract 'n3' and 'n2' from 'tmp_sn2007_5' in 'merged_df'
+#     merged_df["n3"] = merged_df["tmp_sn2007_5"].str[:4]
+#     merged_df["n2"] = merged_df["tmp_sn2007_5"].str[:2]
 
-    # Select specific columns for 'temp_2' from 'merged_df'
-    temp_2 = merged_df[['id',
-                        'nacef_5',
-                        'orgnr_n_1',
-                        'b_sysselsetting_syss',
-                        'b_kommunenr',
-                        'gjeldende_lonn_kr', 
-                        'new_drkost',
-                        'oms',
-                        'bedr_forbruk',
-                        'bedr_salgsint',
-                        'tmp_sn2007_5',
-                        'n3',
-                        'n2',
-                        'year']]
+#     # Select specific columns for 'temp_2' from 'merged_df'
+#     temp_2 = merged_df[['id',
+#                         'nacef_5',
+#                         'orgnr_n_1',
+#                         'b_sysselsetting_syss',
+#                         'b_kommunenr',
+#                         'gjeldende_lonn_kr', 
+#                         'new_drkost',
+#                         'oms',
+#                         'bedr_forbruk',
+#                         'bedr_salgsint',
+#                         'tmp_sn2007_5',
+#                         'n3',
+#                         'n2',
+#                         'year']]
 
-    # Rename columns in 'temp_2'
-    temp_2 = temp_2.rename(columns={'b_sysselsetting_syss':'syss',
-                                    'b_kommunenr':'kommunenr',
-                                    'gjeldende_lonn_kr':'lonn',
-                                    'bedr_forbruk':'forbruk',
-                                    'bedr_salgsint':'salgsint',
-                                    'new_drkost': 'drkost'
-                                   })
+#     # Rename columns in 'temp_2'
+#     temp_2 = temp_2.rename(columns={'b_sysselsetting_syss':'syss',
+#                                     'b_kommunenr':'kommunenr',
+#                                     'gjeldende_lonn_kr':'lonn',
+#                                     'bedr_forbruk':'forbruk',
+#                                     'bedr_salgsint':'salgsint',
+#                                     'new_drkost': 'drkost'
+#                                    })
 
-    # Filter 'temp_2' for the current year
-    temp_2 = temp_2[temp_2['year'] == year]
+#     # Filter 'temp_2' for the current year
+#     temp_2 = temp_2[temp_2['year'] == year]
 
-    # Fill NaN values in 'forbruk' and 'salgsint' with 0 in 'temp_1'
-    temp_1['forbruk'] = temp_1['forbruk'].fillna(0)
-    temp_1['salgsint'] = temp_1['salgsint'].fillna(0)
+#     # Fill NaN values in 'forbruk' and 'salgsint' with 0 in 'temp_1'
+#     temp_1['forbruk'] = temp_1['forbruk'].fillna(0)
+#     temp_1['salgsint'] = temp_1['salgsint'].fillna(0)
 
-    # Concatenate 'temp_1' and 'temp_2' into 'timeseries_knn'
-    timeseries_knn = pd.concat([temp_1, temp_2], axis=0)
+#     # Concatenate 'temp_1' and 'temp_2' into 'timeseries_knn'
+#     timeseries_knn = pd.concat([temp_1, temp_2], axis=0)
 
-    # Aggregate forbruk per year
+#     # Aggregate forbruk per year
 
-    columns_to_convert = ['salgsint', 'forbruk', 'oms', 'drkost', 'lonn', 'syss']
+#     columns_to_convert = ['salgsint', 'forbruk', 'oms', 'drkost', 'lonn', 'syss']
 
-    # Convert columns to numeric using pd.to_numeric for safe conversion, errors='coerce' will set issues to NaN
-    for column in columns_to_convert:
-        timeseries_knn[column] = pd.to_numeric(timeseries_knn[column], errors='coerce')
+#     # Convert columns to numeric using pd.to_numeric for safe conversion, errors='coerce' will set issues to NaN
+#     for column in columns_to_convert:
+#         timeseries_knn[column] = pd.to_numeric(timeseries_knn[column], errors='coerce')
 
-    # Convert 'year' and 'n3' to string
-    timeseries_knn['year'] = timeseries_knn['year'].astype(str)
-    timeseries_knn['n3'] = timeseries_knn['n3'].astype(str)
+#     # Convert 'year' and 'n3' to string
+#     timeseries_knn['year'] = timeseries_knn['year'].astype(str)
+#     timeseries_knn['n3'] = timeseries_knn['n3'].astype(str)
 
-    # Calculate 'resultat' as the difference between 'oms' and 'drkost'
-    timeseries_knn['resultat'] = timeseries_knn['oms'] - timeseries_knn['drkost']
+#     # Calculate 'resultat' as the difference between 'oms' and 'drkost'
+#     timeseries_knn['resultat'] = timeseries_knn['oms'] - timeseries_knn['drkost']
 
-    # Filter for n3 values in 45, 46, or 47
-    timeseries_knn = timeseries_knn[timeseries_knn['n2'].isin(['45', '46', '47'])]
-    temp = timeseries_knn.copy()
+#     # Filter for n3 values in 45, 46, or 47
+#     timeseries_knn = timeseries_knn[timeseries_knn['n2'].isin(['45', '46', '47'])]
+#     temp = timeseries_knn.copy()
 
-    # Aggregate data by 'year' and 'n3'
-    timeseries_knn_agg = timeseries_knn.groupby(["year", "n3"])[["forbruk", "oms", "drkost", "salgsint", "lonn", 'syss', "resultat"]].sum().reset_index()
+#     # Aggregate data by 'year' and 'n3'
+#     timeseries_knn_agg = timeseries_knn.groupby(["year", "n3"])[["forbruk", "oms", "drkost", "salgsint", "lonn", 'syss', "resultat"]].sum().reset_index()
 
-    # Calculate 'lonn_pr_syss' and 'oms_pr_syss'
-    timeseries_knn_agg['lonn_pr_syss'] = timeseries_knn_agg['lonn'] / timeseries_knn_agg['syss']
-    timeseries_knn_agg['oms_pr_syss'] = timeseries_knn_agg['oms'] / timeseries_knn_agg['syss']
+#     # Calculate 'lonn_pr_syss' and 'oms_pr_syss'
+#     timeseries_knn_agg['lonn_pr_syss'] = timeseries_knn_agg['lonn'] / timeseries_knn_agg['syss']
+#     timeseries_knn_agg['oms_pr_syss'] = timeseries_knn_agg['oms'] / timeseries_knn_agg['syss']
 
-    # Extract the first two characters of 'n3' to create 'n2'
-    timeseries_knn_agg["n2"] = timeseries_knn_agg["n3"].str[:2]
+#     # Extract the first two characters of 'n3' to create 'n2'
+#     timeseries_knn_agg["n2"] = timeseries_knn_agg["n3"].str[:2]
 
-    # Aggregate data by 'year', 'kommunenr', and 'n3'
-    timeseries_knn__kommune_agg = temp.groupby(["year", "kommunenr", "n3"])[["forbruk", "oms", "drkost", "salgsint", "lonn", 'syss', "resultat"]].sum().reset_index()
+#     # Aggregate data by 'year', 'kommunenr', and 'n3'
+#     timeseries_knn__kommune_agg = temp.groupby(["year", "kommunenr", "n3"])[["forbruk", "oms", "drkost", "salgsint", "lonn", 'syss', "resultat"]].sum().reset_index()
 
-    # Calculate 'lonn_pr_syss' and 'oms_pr_syss' for kommune-level data
-    timeseries_knn__kommune_agg['lonn_pr_syss'] = timeseries_knn__kommune_agg['lonn'] / timeseries_knn__kommune_agg['syss']
-    timeseries_knn__kommune_agg['oms_pr_syss'] = timeseries_knn__kommune_agg['oms'] / timeseries_knn__kommune_agg['syss']
+#     # Calculate 'lonn_pr_syss' and 'oms_pr_syss' for kommune-level data
+#     timeseries_knn__kommune_agg['lonn_pr_syss'] = timeseries_knn__kommune_agg['lonn'] / timeseries_knn__kommune_agg['syss']
+#     timeseries_knn__kommune_agg['oms_pr_syss'] = timeseries_knn__kommune_agg['oms'] / timeseries_knn__kommune_agg['syss']
 
-    # Extract the first two characters of 'n3' to create 'n2' for kommune-level data
-    timeseries_knn__kommune_agg["n2"] = timeseries_knn__kommune_agg["n3"].str[:2]
+#     # Extract the first two characters of 'n3' to create 'n2' for kommune-level data
+#     timeseries_knn__kommune_agg["n2"] = timeseries_knn__kommune_agg["n3"].str[:2]
 
-    # Create new columns 'n2_f' and 'n3_f' in 'oppdateringsfil'
-    oppdateringsfil['n2_f'] = oppdateringsfil['nacef_5'].str[:2]
-    oppdateringsfil['n3_f'] = oppdateringsfil['nacef_5'].str[:4]
+#     # Create new columns 'n2_f' and 'n3_f' in 'oppdateringsfil'
+#     oppdateringsfil['n2_f'] = oppdateringsfil['nacef_5'].str[:2]
+#     oppdateringsfil['n3_f'] = oppdateringsfil['nacef_5'].str[:4]
 
-    # Filter 'oppdateringsfil' for rows where 'n2_f' is in 45, 46, or 47
-    oppdateringsfil = oppdateringsfil[oppdateringsfil['n2_f'].isin(['45', '46', '47'])]
+#     # Filter 'oppdateringsfil' for rows where 'n2_f' is in 45, 46, or 47
+#     oppdateringsfil = oppdateringsfil[oppdateringsfil['n2_f'].isin(['45', '46', '47'])]
 
-    # Filter 'oppdateringsfil' for rows where 'radnr' is 1 to create 'foretak'
-    temp = oppdateringsfil[oppdateringsfil['radnr'] == 1]
+#     # Filter 'oppdateringsfil' for rows where 'radnr' is 1 to create 'foretak'
+#     temp = oppdateringsfil[oppdateringsfil['radnr'] == 1]
 
-    # Group by 'n3_f' and sum specific columns in 'temp'
-    temp = temp.groupby('n3_f').sum()[['foretak_omsetning', 'foretak_driftskostnad', 'forbruk', 'salgsint']].reset_index()
+#     # Group by 'n3_f' and sum specific columns in 'temp'
+#     temp = temp.groupby('n3_f').sum()[['foretak_omsetning', 'foretak_driftskostnad', 'forbruk', 'salgsint']].reset_index()
 
-    # Group by 'n3_f' and sum specific columns in 'oppdateringsfil' to create 'bedrift'
-    bedrift = oppdateringsfil.groupby('n3_f').sum()[['oms', 'new_drkost', 'bedr_forbruk', 'bedr_salgsint']].reset_index()
+#     # Group by 'n3_f' and sum specific columns in 'oppdateringsfil' to create 'bedrift'
+#     bedrift = oppdateringsfil.groupby('n3_f').sum()[['oms', 'new_drkost', 'bedr_forbruk', 'bedr_salgsint']].reset_index()
 
-    # Merge 'temp' and 'bedrift' on 'n3_f' to create 'check_totals'
-    check_totals = temp.merge(bedrift, on='n3_f', how='left')
+#     # Merge 'temp' and 'bedrift' on 'n3_f' to create 'check_totals'
+#     check_totals = temp.merge(bedrift, on='n3_f', how='left')
 
+
+    # these checks only made for varehandel at this stage: 
+    if skjema == 'RA-0174-1':
+        # Extract 'n3' and 'n2' from 'tmp_sn2007_5' in 'time_series_df'
+        time_series_df["n3"] = time_series_df["tmp_sn2007_5"].str[:4]
+        time_series_df["n2"] = time_series_df["tmp_sn2007_5"].str[:2]
+
+        # Extract 'n2' from 'tmp_sn2007_5' in 'merged_df'
+        merged_df["n2"] = merged_df["tmp_sn2007_5"].str[:2]
+
+        # Select specific columns for 'temp_1' from 'time_series_df'
+        temp_1 = time_series_df[['id',
+                                 'nacef_5',
+                                 'orgnr_n_1',
+                                 'b_sysselsetting_syss',
+                                 'b_kommunenr',
+                                 'gjeldende_lonn_kr', 
+                                 'gjeldende_driftsk_kr',
+                                 'gjeldende_omsetn_kr',
+                                 'tmp_forbruk_bed',
+                                 'tmp_salgsint_bed',
+                                 'tmp_sn2007_5',
+                                 'n3',
+                                 'n2',
+                                 'year']]
+
+        # Rename columns in 'temp_1'
+        temp_1 = temp_1.rename(columns={'b_sysselsetting_syss':'syss',
+                                        'b_kommunenr':'kommunenr',
+                                        'gjeldende_lonn_kr':'lonn',
+                                        'gjeldende_omsetn_kr':'oms',
+                                        'gjeldende_driftsk_kr': 'drkost',
+                                        'tmp_forbruk_bed':'forbruk',
+                                        'tmp_salgsint_bed':'salgsint',
+                                       })
+
+        # Filter out the current year from 'temp_1'
+        temp_1 = temp_1[temp_1['year'] != year]
+
+        # Extract 'n3' and 'n2' from 'tmp_sn2007_5' in 'merged_df'
+        merged_df["n3"] = merged_df["tmp_sn2007_5"].str[:4]
+        merged_df["n2"] = merged_df["tmp_sn2007_5"].str[:2]
+
+        # Select specific columns for 'temp_2' from 'merged_df'
+        temp_2 = merged_df[['id',
+                            'nacef_5',
+                            'orgnr_n_1',
+                            'b_sysselsetting_syss',
+                            'b_kommunenr',
+                            'gjeldende_lonn_kr', 
+                            'new_drkost',
+                            'oms',
+                            'bedr_forbruk',
+                            'bedr_salgsint',
+                            'tmp_sn2007_5',
+                            'n3',
+                            'n2',
+                            'year']]
+
+        # Rename columns in 'temp_2'
+        temp_2 = temp_2.rename(columns={'b_sysselsetting_syss':'syss',
+                                        'b_kommunenr':'kommunenr',
+                                        'gjeldende_lonn_kr':'lonn',
+                                        'bedr_forbruk':'forbruk',
+                                        'bedr_salgsint':'salgsint',
+                                        'new_drkost': 'drkost'
+                                       })
+
+        # Filter 'temp_2' for the current year
+        temp_2 = temp_2[temp_2['year'] == year]
+
+        # Fill NaN values in 'forbruk' and 'salgsint' with 0 in 'temp_1'
+        temp_1['forbruk'] = temp_1['forbruk'].fillna(0)
+        temp_1['salgsint'] = temp_1['salgsint'].fillna(0)
+
+        # Concatenate 'temp_1' and 'temp_2' into 'timeseries_knn'
+        timeseries_knn = pd.concat([temp_1, temp_2], axis=0)
+
+        # Aggregate forbruk per year
+
+        columns_to_convert = ['salgsint', 'forbruk', 'oms', 'drkost', 'lonn', 'syss']
+
+        # Convert columns to numeric using pd.to_numeric for safe conversion, errors='coerce' will set issues to NaN
+        for column in columns_to_convert:
+            timeseries_knn[column] = pd.to_numeric(timeseries_knn[column], errors='coerce')
+
+        # Convert 'year' and 'n3' to string
+        timeseries_knn['year'] = timeseries_knn['year'].astype(str)
+        timeseries_knn['n3'] = timeseries_knn['n3'].astype(str)
+
+        # Calculate 'resultat' as the difference between 'oms' and 'drkost'
+        timeseries_knn['resultat'] = timeseries_knn['oms'] - timeseries_knn['drkost']
+
+        # Filter for n3 values in 45, 46, or 47
+        timeseries_knn = timeseries_knn[timeseries_knn['n2'].isin(['45', '46', '47'])]
+        temp = timeseries_knn.copy()
+
+        # Aggregate data by 'year' and 'n3'
+        timeseries_knn_agg = timeseries_knn.groupby(["year", "n3"])[["forbruk", "oms", "drkost", "salgsint", "lonn", 'syss', "resultat"]].sum().reset_index()
+
+        # Calculate 'lonn_pr_syss' and 'oms_pr_syss'
+        timeseries_knn_agg['lonn_pr_syss'] = timeseries_knn_agg['lonn'] / timeseries_knn_agg['syss']
+        timeseries_knn_agg['oms_pr_syss'] = timeseries_knn_agg['oms'] / timeseries_knn_agg['syss']
+
+        # Extract the first two characters of 'n3' to create 'n2'
+        timeseries_knn_agg["n2"] = timeseries_knn_agg["n3"].str[:2]
+
+        # Aggregate data by 'year', 'kommunenr', and 'n3'
+        timeseries_knn__kommune_agg = temp.groupby(["year", "kommunenr", "n3"])[["forbruk", "oms", "drkost", "salgsint", "lonn", 'syss', "resultat"]].sum().reset_index()
+
+        # Calculate 'lonn_pr_syss' and 'oms_pr_syss' for kommune-level data
+        timeseries_knn__kommune_agg['lonn_pr_syss'] = timeseries_knn__kommune_agg['lonn'] / timeseries_knn__kommune_agg['syss']
+        timeseries_knn__kommune_agg['oms_pr_syss'] = timeseries_knn__kommune_agg['oms'] / timeseries_knn__kommune_agg['syss']
+
+        # Extract the first two characters of 'n3' to create 'n2' for kommune-level data
+        timeseries_knn__kommune_agg["n2"] = timeseries_knn__kommune_agg["n3"].str[:2]
+
+        # Create new columns 'n2_f' and 'n3_f' in 'oppdateringsfil'
+        oppdateringsfil['n2_f'] = oppdateringsfil['nacef_5'].str[:2]
+        oppdateringsfil['n3_f'] = oppdateringsfil['nacef_5'].str[:4]
+
+        # Filter 'oppdateringsfil' for rows where 'n2_f' is in 45, 46, or 47
+        oppdateringsfil = oppdateringsfil[oppdateringsfil['n2_f'].isin(['45', '46', '47'])]
+
+        # Filter 'oppdateringsfil' for rows where 'radnr' is 1 to create 'foretak'
+        temp = oppdateringsfil[oppdateringsfil['radnr'] == 1]
+
+        # Group by 'n3_f' and sum specific columns in 'temp'
+        temp = temp.groupby('n3_f').sum()[['foretak_omsetning', 'foretak_driftskostnad', 'forbruk', 'salgsint']].reset_index()
+
+        # Group by 'n3_f' and sum specific columns in 'oppdateringsfil' to create 'bedrift'
+        bedrift = oppdateringsfil.groupby('n3_f').sum()[['oms', 'new_drkost', 'bedr_forbruk', 'bedr_salgsint']].reset_index()
+
+        # Merge 'temp' and 'bedrift' on 'n3_f' to create 'check_totals'
+        check_totals = temp.merge(bedrift, on='n3_f', how='left')
+
+    
+    if skjema == 'RA-0255-1':
+       
+        # Create new columns 'n2_f' and 'n3_f' in 'oppdateringsfil'
+        oppdateringsfil['n2_f'] = oppdateringsfil['nacef_5'].str[:2]
+        oppdateringsfil['n3_f'] = oppdateringsfil['nacef_5'].str[:4]
+
+        # Filter 'oppdateringsfil' for rows where 'n2_f' is in 68 (for now)
+        oppdateringsfil = oppdateringsfil[oppdateringsfil['n2_f'].isin(['68'])]
+
+        # Filter 'oppdateringsfil' for rows where 'radnr' is 1 to create 'foretak'
+        temp = oppdateringsfil[oppdateringsfil['radnr'] == 1]
+
+        # Group by 'n3_f' and sum specific columns in 'temp'
+        temp = temp.groupby('n3_f').sum()[['foretak_omsetning', 'foretak_driftskostnad', 'forbruk', 'salgsint']].reset_index()
+
+        # Group by 'n3_f' and sum specific columns in 'oppdateringsfil' to create 'bedrift'
+        bedrift = oppdateringsfil.groupby('n3_f').sum()[['oms', 'new_drkost', 'bedr_forbruk', 'bedr_salgsint']].reset_index()
+
+        # Merge 'temp' and 'bedrift' on 'n3_f' to create 'check_totals'
+        check_totals = temp.merge(bedrift, on='n3_f', how='left')
+        
+        # Create the DataFrame
+        timeseries_knn_agg = pd.DataFrame({'explanation': ['placeholder until code is set up for this skjema']})
+        timeseries_knn__kommune_agg = pd.DataFrame({'explanation': ['placeholder until code is set up for this skjema']})
+
+        
+    
+    filtered_df = oppdateringsfil[oppdateringsfil['v_orgnr'].isin(v_orgnr_list_for_imputering)]
+    
+    unique_id_count = filtered_df[filtered_df['n2_f'] == {tosiffernaring}]['id'].nunique()
+
+    print(f"Number of unique 'id' where 'n2_f' is {tosiffernaring}: {unique_id_count}")
+
+    # Get the unique 'id' values as a list where 'n2_f' is 45
+    # unique_ids_list = filtered_df[filtered_df['n2_f'] == {tosiffernaring}]['id'].unique().tolist()
+    unique_ids_list = filtered_df[(filtered_df['n2_f'] == tosiffernaring) & (filtered_df['regtype'] != '01')]['id'].unique().tolist()
+
+
+    # Print the list of unique IDs
+    print(f"Unique 'id' values where 'n2_f' is {tosiffernaring}: {unique_ids_list}")
+    
+
+    # rename variables in filtered_df
+    
+    filtered_df = filtered_df[filtered_df['n2_f'] == {tosiffernaring}]
+    
+    til_bakken = filtered_df[['id', 'v_orgnr', 'oms', 'new_drkost']]
+
+    til_bakken = til_bakken.rename(columns={'id': 'enhets_id', 'v_orgnr': 'orgnr_bedrift', 'oms': 'gjeldende_omsetn_kr', 'new_drkost': 'gjeldende_driftsk_kr'})
+    
+   
     # Calculate processing time
     processing_time = time.time() - start_time
     print(f"Time taken to create training data: {processing_time:.2f} seconds")
-
+    
     # Return the processed dataframes
-    return oppdateringsfil, timeseries_knn_agg, timeseries_knn__kommune_agg, check_totals, check_manually
+    return oppdateringsfil, timeseries_knn_agg, timeseries_knn__kommune_agg, check_totals, check_manually, v_orgnr_list_for_imputering, til_bakken, unique_id_list
 
