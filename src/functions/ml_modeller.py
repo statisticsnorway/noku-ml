@@ -584,6 +584,212 @@ def knn_model(training_df, scaler, df_estimeres, year, GridSearch=True):
     
     return imputed_df
 
+def knn_model_with_pca(training_df, scaler, df_estimeres, year, GridSearch=True, apply_pca=True, n_components=5):
+
+    """
+    Trains a K-Nearest Neighbors model for predicting new_oms values with optional PCA for dimensionality reduction
+    and optional GridSearch for hyperparameter tuning. Includes interactive plot for explained variance.
+
+    Parameters:
+    training_df (pd.DataFrame): DataFrame containing the training data.
+    scaler (object): Scaler object for numerical features (e.g., StandardScaler, RobustScaler).
+    df_estimeres (pd.DataFrame): DataFrame containing the data to be imputed.
+    GridSearch (bool): Whether to perform GridSearch for hyperparameter tuning. Default is True.
+    apply_pca (bool): Whether to apply PCA for dimensionality reduction. Default is True.
+    n_components (int, float, or None): Number of components to keep after applying PCA. If None, it will not reduce dimensions.
+                                         If a float is given (e.g., 0.95), PCA will select the number of components that explain that proportion of variance.
+
+    Returns:
+    pd.DataFrame: DataFrame with predicted new_oms values.
+    """
+    from sklearn.decomposition import PCA
+    import matplotlib.pyplot as plt
+    import plotly.graph_objects as go
+    import numpy as np
+    from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+    from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.compose import ColumnTransformer
+    from sklearn.neighbors import KNeighborsRegressor
+    import pandas as pd
+    
+    # Make copies of the input DataFrames
+    df = training_df.copy()
+    imputed_df = df_estimeres.copy()
+    
+    categorical_columns = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    df[categorical_columns] = df[categorical_columns].astype(str)
+    imputed_df[categorical_columns] = imputed_df[categorical_columns].astype(str)
+
+    columns_to_fill = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    numeric_columns_to_fill = [
+        "inntekt_delta_oms", "emp_delta_oms", "befolkning_delta_oms", 
+        "inflation_rate_oms", "gjeldende_bdr_syss", "new_oms_trendForecast",
+        'oms_syssmean_basedOn_naring', 'oms_syssmean_basedOn_naring_kommune'
+    ]
+
+    # Fill missing values
+    df[columns_to_fill] = df[columns_to_fill].fillna('missing')
+    imputed_df[columns_to_fill] = imputed_df[columns_to_fill].fillna('missing')
+    df[numeric_columns_to_fill] = df[numeric_columns_to_fill].fillna(0)
+    imputed_df[numeric_columns_to_fill] = imputed_df[numeric_columns_to_fill].fillna(0)
+
+    # Define features and target
+    X = df.drop(columns=["new_oms"])
+    y = df["new_oms"]
+
+    categorical_features = ["nacef_5", "tmp_sn2007_5", "b_kommunenr"]
+    numerical_features = [
+        "inntekt_delta_oms", "emp_delta_oms", "befolkning_delta_oms", 
+        "inflation_rate_oms", "gjeldende_bdr_syss", "new_oms_trendForecast", 
+        'oms_syssmean_basedOn_naring', 'oms_syssmean_basedOn_naring_kommune'
+    ]
+
+    # Preprocessing pipeline
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", scaler, numerical_features),
+            ("cat", OneHotEncoder(categories="auto", handle_unknown="ignore"), categorical_features),
+        ]
+    )
+
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Fit the preprocessor and transform the training and testing data
+    preprocessor.fit(X_train)
+    X_train_transformed = preprocessor.transform(X_train)
+    X_test_transformed = preprocessor.transform(X_test)
+
+    pca = PCA(n_components=n_components)
+    X_train_pca = pca.fit_transform(X_train_transformed)
+    X_test_pca = pca.transform(X_test_transformed)
+
+    # Automatically create and display the interactive PCA plot
+    explained_variance = np.cumsum(pca.explained_variance_ratio_)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=np.arange(1, len(explained_variance) + 1),
+        y=explained_variance,
+        mode='lines+markers',
+        marker=dict(size=8),
+        hovertemplate='Component %{x}<br>Cumulative Explained Variance: %{y:.2f}<extra></extra>',
+        line=dict(dash='dash', color='blue')
+    ))
+
+    # Update layout
+    fig.update_layout(
+        title='Cumulative Explained Variance by PCA Components',
+        xaxis_title='Number of Components',
+        yaxis_title='Cumulative Explained Variance',
+        template="plotly_white"
+    )
+
+    # Show the plot
+    fig.show()
+    
+    # Get the PCA components and their corresponding feature importance
+    pca_components = pd.DataFrame(
+        pca.components_,
+        columns=numerical_features + list(preprocessor.named_transformers_['cat'].get_feature_names_out()),
+        index=[f"PC{i+1}" for i in range(pca.n_components_)]
+    )
+
+    # Display the top contributing features for each component
+    for i in range(pca.n_components_):
+        print(f"\nTop features for PC{i+1}:")
+        component = pca_components.iloc[i]
+        sorted_component = component.abs().sort_values(ascending=False)
+        top_features = sorted_component.head(5).index.tolist()
+        print(f"Top contributing features: {top_features}")
+        print(component.loc[top_features])
+
+    X_train_transformed = X_train_pca
+    X_test_transformed = X_test_pca
+
+    if GridSearch:
+        # Define the model and perform GridSearch with cross-validation
+        regressor = KNeighborsRegressor()
+        param_grid = {'n_neighbors': [2, 3, 5, 7]}
+        grid_search = GridSearchCV(estimator=regressor, param_grid=param_grid, scoring='neg_mean_squared_error', cv=5, verbose=1)
+        grid_search.fit(X_train_transformed, y_train)
+        print("Best parameters found by GridSearch:", grid_search.best_params_)
+        regressor = grid_search.best_estimator_
+    else:
+        regressor = KNeighborsRegressor(n_neighbors=2)
+        regressor.fit(X_train_transformed, y_train)
+
+    # Evaluate with cross-validation
+    cv_scores = cross_val_score(regressor, X_train_transformed, y_train, cv=5, scoring='neg_mean_absolute_error')
+    mean_mae = -np.mean(cv_scores)
+    std_mae = np.std(cv_scores)
+    print(f"Cross-Validated Mean MAE: {mean_mae}")
+    print(f"Cross-Validated MAE Standard Deviation: {std_mae}")
+
+    # Predict on test data
+    y_pred = regressor.predict(X_test_transformed)
+    mse = mean_squared_error(y_test, y_pred)
+    r_squared = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    print("Mean Squared Error:", mse)
+    print("R-squared:", r_squared)
+    print("Mean Absolute Error:", mae)
+    
+    # Calculate MAE per year and print it
+    results = X_test.copy()
+    results['actual'] = y_test
+    results['predicted'] = y_pred
+    
+    if 'year' in results.columns:
+        mae_per_year = results.groupby('year').apply(lambda group: mean_absolute_error(group['actual'], group['predicted']))
+        print("\nMean Absolute Error per Year:")
+        print(mae_per_year)
+   
+    # Create the n3 class by taking the first 4 characters of nacef_5
+    X_test['n3'] = X_test['nacef_5'].str[:4]
+    
+    # Evaluate performance based on the n3 class
+    results = pd.DataFrame({'n3': X_test['n3'], 'actual': y_test, 'predicted': y_pred})
+        
+    metrics_per_n3 = results.groupby('n3').apply(lambda group: pd.Series({
+        'mse': mean_squared_error(group['actual'], group['predicted']),
+        'r_squared': r2_score(group['actual'], group['predicted']),
+        'mae': mean_absolute_error(group['actual'], group['predicted'])
+    })).reset_index()
+    
+    print("Metrics per 'n3':")
+    print(metrics_per_n3)
+
+    # Plot Predicted vs. Actual Values
+    plt.figure(figsize=(10, 5))
+    plt.scatter(y_test, y_pred, alpha=0.3)
+    plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], "r--", lw=2)
+    plt.xlabel("Actual")
+    plt.ylabel("Predicted")
+    plt.title("Predicted vs. Actual Values")
+    plt.show()
+
+    # Plot Residuals
+    residuals = y_test - y_pred
+    plt.figure(figsize=(10, 5))
+    plt.scatter(y_test, residuals, alpha=0.3)
+    plt.hlines(0, y_test.min(), y_test.max(), colors="r", linestyles="dashed")
+    plt.xlabel("Actual")
+    plt.ylabel("Residuals")
+    plt.title("Residuals Plot")
+    plt.show()
+
+    # Impute the missing data
+    imputed_X = imputed_df.drop(columns=["new_oms"])
+    imputed_X_transformed = preprocessor.transform(imputed_X)
+    
+    imputed_X_transformed = pca.transform(imputed_X_transformed)
+    
+    imputed_df["predicted_oms"] = regressor.predict(imputed_X_transformed)
+    
+    return imputed_df
+
+
 
 def knn_model_new(training_df, scaler, df_estimeres, current_year, GridSearch=True):
     import numpy as np
