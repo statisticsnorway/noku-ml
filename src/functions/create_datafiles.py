@@ -49,14 +49,16 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     #     start_year = 2018
     # else:
     #     start_year = 2017
-    
+    prior_year= year - 1
     start_year = 2017
 
     all_good_dataframes = []  # List to store good dataframes for each year
     all_bad_dataframes = []   # List to store bad dataframes for each year
     all_training_dataframes = []  # List to store training dataframes for each year
     all_time_series_dataframes = []  # List to store time series dataframes for each year
-
+    
+    start_datafile_loop = time.time()
+    
     for current_year in range(start_year, year + 1):
         
         fjor = current_year - 1  # Previous year
@@ -156,12 +158,13 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             ]
 
             # Use the ParquetDataset to read multiple files
-            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            # dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            foretak_pub = pd.read_parquet(fil_path, filesystem=fs)
             
-            table = dataset.read()
+#             table = dataset.read()
 
-            # Convert to Pandas DataFrame
-            foretak_pub = table.to_pandas()
+#             # Convert to Pandas DataFrame
+#             foretak_pub = table.to_pandas()
 
             # Check if current_year is 2022 or higher
             if current_year >= 2023:
@@ -484,7 +487,9 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
         del onlygooddriftskostnader
                  
-        if uu_data and current_year == year:
+        if uu_data and (current_year == year or current_year == prior_year):
+            
+            start_uu = time.time()
             
             print("uu_data for:", {current_year}, "is True, proceeding with data processing...")
             
@@ -584,6 +589,11 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             
 
             del bedrift_pub
+            
+            # Calculate processing time
+            processing_time_uu = time.time() - start_uu
+            print(f"Time taken to process uu data for {current_year}: {processing_time_uu:.2f} seconds")
+        
         else:
             print("uu_data is False, skipping data processing.")
         
@@ -595,6 +605,9 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
         # kpi_df = kpi.process_kpi_data(current_year)
         
         # Get kommune population growth , income trends and inflation data 
+        
+        api_time = time.time()
+        
         try:
             kommune_befolk = kommune_pop.befolkning_behandling(current_year, fjor)
         except Exception as e:
@@ -624,6 +637,11 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             except Exception as e:
                 print(f"Failed to fetch kpi_df for {current_year - 1} as well.")
                 kpi_df = None
+                
+        processing_time_api = time.time() - api_time
+        print(f"Time taken to process kommune data, population data and inflation data for {current_year}: {processing_time_api:.2f} seconds")
+        
+        
         # Convert string columns to numeric
         merged_df["gjeldende_bdr_syss"] = pd.to_numeric(
             merged_df["gjeldende_bdr_syss"], errors="coerce"
@@ -924,7 +942,13 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     current_year_good_oms = good_data[good_data['year'] == year]
     current_year_bad_oms = bad_data[bad_data['year'] == year]
     v_orgnr_list_for_imputering = current_year_bad_oms['v_orgnr'].tolist()
-    unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith(tosiffernaring)]['id'].unique().tolist()   
+    # unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith(tosiffernaring)]['id'].unique().tolist()   
+    # If tosiffernaring contains multiple categories, filter by checking if 'nacef_5' starts with any of them
+    
+    unique_id_list = current_year_bad_oms[
+        current_year_bad_oms['nacef_5'].str[:2].isin(tosiffernaring)
+    ]['id'].unique().tolist()
+
     
     # Easy solution for filling Nan Values - only for training, not for editing real data
     training_data['tmp_sn2007_5'].fillna(training_data['nacef_5'], inplace=True)
@@ -934,6 +958,12 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     # training_data['new_oms'] = training_data['new_oms'].str.replace(',', '.').astype(float)
     
     # Create trend data
+    
+    # Calculate processing time
+    processing_time_datafile_loop = time.time() - start_datafile_loop
+    print(f"Time taken to create base training data: {processing_time_datafile_loop:.2f} seconds")
+    
+    oms_trend_time = time.time()
     
     print("starting regression line function")
     # Determine the number of CPU cores available
@@ -946,7 +976,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
     # Sort the data
     training_data = training_data.sort_values(by=["v_orgnr", "year"])
-
+    
     # Function to process each group
     def process_group(v_orgnr, group):
         group_forecast = group[["v_orgnr", "year"]].copy()
@@ -975,6 +1005,9 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
     # Concatenate results
     trend_forecasts = pd.concat(results, ignore_index=True)
+    
+    processing_time_trends = time.time() - start_datafile_loop
+    print(f"Time taken to create base training data: {processing_time_trends:.2f} seconds")
 
     # Merge the trend forecasts with the original training data
     training_data = pd.merge(training_data, trend_forecasts, on=["v_orgnr", "year"], how="left")
@@ -1117,3 +1150,5 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     training_data = training_data[~training_data['v_orgnr'].isin(v_orgnr_list_for_imputering)]
     
     return current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list
+    
+
