@@ -39,14 +39,11 @@ files = [
 
 [[package]]
 name = "aiohttp"
-
 version = "3.10.3"
-
 description = "Async http client/server framework (asyncio)"
 optional = false
 python-versions = ">=3.8"
 files = [
-
     {file = "aiohttp-3.10.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:cc36cbdedf6f259371dbbbcaae5bb0e95b879bc501668ab6306af867577eb5db"},
     {file = "aiohttp-3.10.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:85466b5a695c2a7db13eb2c200af552d13e6a9313d7fa92e4ffe04a2c0ea74c1"},
     {file = "aiohttp-3.10.3-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:71bb1d97bfe7e6726267cea169fdf5df7658831bb68ec02c9c6b9f3511e108bb"},
@@ -123,7 +120,6 @@ files = [
     {file = "aiohttp-3.10.3-cp39-cp39-win32.whl", hash = "sha256:b69d832e5f5fa15b1b6b2c8eb6a9fd2c0ec1fd7729cb4322ed27771afc9fc2ac"},
     {file = "aiohttp-3.10.3-cp39-cp39-win_amd64.whl", hash = "sha256:673bb6e3249dc8825df1105f6ef74e2eab779b7ff78e96c15cadb78b04a83752"},
     {file = "aiohttp-3.10.3.tar.gz", hash = "sha256:21650e7032cc2d31fc23d353d7123e771354f2a3d5b05a5647fc30fea214e696"},
-
 ]
 
 [package.dependencies]
@@ -136,7 +132,6 @@ multidict = ">=4.5,<7.0"
 yarl = ">=1.0,<2.0"
 
 [package.extras]
-
 speedups = ["Brotli", "aiodns (>=3.2.0)", "brotlicffi"]
 
 [[package]]
@@ -4430,7 +4425,6 @@ ptyprocess = ">=0.5"
 [[package]]
 name = "pillow"
 version = "10.4.0"
-
 description = "Python Imaging Library (Fork)"
 optional = false
 python-versions = ">=3.8"
@@ -4519,7 +4513,6 @@ files = [
 
 [package.extras]
 docs = ["furo", "olefile", "sphinx (>=7.3)", "sphinx-copybutton", "sphinx-inline-tabs", "sphinxext-opengraph"]
-
 fpx = ["olefile"]
 mic = ["olefile"]
 tests = ["check-manifest", "coverage", "defusedxml", "markdown2", "olefile", "packaging", "pyroma", "pytest", "pytest-cov", "pytest-timeout"]
@@ -5079,6 +5072,10 @@ files = [
     {file = "pyreadr-0.5.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f3f200d4bd7dcfa37b9d244f05b3708b7183bb7978c6865a1364f39727021fb0"},
     {file = "pyreadr-0.5.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3aa4919beb4cfa9c915e704b41d32d8c40a4f505a7c9bfdfc4930b3b4da5d2b8"},
     {file = "pyreadr-0.5.2-cp312-cp312-win_amd64.whl", hash = "sha256:6bae17a8970b62c2af257ec8c5aad9d759a1bdc2a763e299ff82826d7140afe4"},
+    {file = "pyreadr-0.5.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f8e0b0db674c3a25b4d38016a4a2fe18c5107ccab08b31bfdc1e328c184d8b17"},
+    {file = "pyreadr-0.5.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:d77ddc6a7ac98ea61394f349aa90bbda0513fdde8b27e73116cb077dff8d5a85"},
+    {file = "pyreadr-0.5.2-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d31b4adcef91a8c75818097851dfdce9d44ad46c763c8a2dc6ffbca0b62c4675"},
+    {file = "pyreadr-0.5.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:49b11fc281cd6e3a689de1962a60c812f5138c369bb25530fd0bcd91164566cb"},
     {file = "pyreadr-0.5.2-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:286a29fe24e319325655455b265bf1acf34541ff77d0ad8dd56900da3ab72fb8"},
     {file = "pyreadr-0.5.2-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:ed98fbaae0198a73efa29f2d2aa9af77d8f1cb8ad9c2ac23ecc6fd70a75ca092"},
     {file = "pyreadr-0.5.2-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:444190968331437863fff09e64ba003665dd075c3fe3736c638083ed1b16d8ff"},
@@ -6745,7 +6742,6 @@ dev = ["flake8", "flake8-annotations", "flake8-bandit", "flake8-bugbear", "flake
 [[package]]
 name = "urllib3"
 version = "2.2.2"
-
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.8"
@@ -6825,13 +6821,13 @@ test = ["websockets"]
 
 [[package]]
 name = "werkzeug"
-version = "3.0.3"
+version = "3.0.6"
 description = "The comprehensive WSGI web application library."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "werkzeug-3.0.3-py3-none-any.whl", hash = "sha256:fc9645dc43e03e4d630d23143a04a7f947a9a3b5727cd535fdfe155a17cc48c8"},
-    {file = "werkzeug-3.0.3.tar.gz", hash = "sha256:097e5bfda9f0aba8da6b8545146def481d06aa7d3266e7448e2cccf67dd8bd18"},
+    {file = "werkzeug-3.0.6-py3-none-any.whl", hash = "sha256:1bc0c2310d2fbb07b1dd1105eba2f7af72f322e1e455f2f93c993bee8c8a5f17"},
+    {file = "werkzeug-3.0.6.tar.gz", hash = "sha256:a8dd59d4de28ca70471a34cba79bed5f7ef2e036a76b3ab0835474246eb41f8d"},
 ]
 
 [package.dependencies]
