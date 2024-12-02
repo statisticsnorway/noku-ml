@@ -39,6 +39,8 @@ import numpy as np
 import multiprocessing
 import time
 import kommune_translate
+import polars as pl
+import fsspec
 
 
 def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=False, uu_data=False):
@@ -49,35 +51,40 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     #     start_year = 2018
     # else:
     #     start_year = 2017
-    
+    prior_year= year - 1
     start_year = 2017
 
     all_good_dataframes = []  # List to store good dataframes for each year
     all_bad_dataframes = []   # List to store bad dataframes for each year
     all_training_dataframes = []  # List to store training dataframes for each year
     all_time_series_dataframes = []  # List to store time series dataframes for each year
-
+    
+    start_datafile_loop = time.time()
+    
     for current_year in range(start_year, year + 1):
+        
+        print("starting data collection for:", {current_year}, "...")
         
         fjor = current_year - 1  # Previous year
         
         # skjema_list = ['RA-0174-1', 'RA-0174A3', 'RA-0827A3']
         # skjema_list = 'RA-0174-1'
         skjema_list = skjema_nr
-        fil_path = [
-            f
-            for f in fs.glob(
-                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/skjemadata/skjema={skjema_list}/aar={current_year}/*"
-            )
-            # if f.endswith(".parquet")
-        ]
+        
+#         fil_path = [
+#             f
+#             for f in fs.glob(
+#                 f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/skjemadata/skjema={skjema_list}/aar={current_year}/*"
+#             )
+#             # if f.endswith(".parquet")
+#         ]
 
-        # Assuming there's only one file in fil_path
-        if fil_path:
-            skjema = pd.read_parquet(fil_path[0], filesystem=fs)
-        else:
-            raise FileNotFoundError(f"No Parquet files found for year {current_year}")
-            print(fil_path)
+#         # Assuming there's only one file in fil_path
+#         if fil_path:
+#             skjema = pd.read_parquet(fil_path[0], filesystem=fs)
+#         else:
+#             raise FileNotFoundError(f"No Parquet files found for year {current_year}")
+#             print(fil_path)
                
         felt_id_values = [
             "V_ORGNR",
@@ -124,8 +131,22 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             "REG_TYPE_BEDRIFT"
         ]
 
-        # Filter the DataFrame for the specified field values
-        skjema = skjema[skjema["feltnavn"].isin(felt_id_values)]
+#         # Filter the DataFrame for the specified field values
+#         skjema = skjema[skjema["feltnavn"].isin(felt_id_values)]
+        
+    
+        file_path = f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/skjemadata/skjema={skjema_list}/aar={current_year}/skjemadata_data_0.parquet"
+
+        f = FileClient.gcs_open(file_path)
+        
+        skjema = (
+            pl.read_parquet(f)
+            .filter(pl.col("feltnavn").is_in(felt_id_values))
+        )
+        
+        skjema = skjema.to_pandas()
+        
+        skjema.columns = skjema.columns.str.lower()
         
         # Pivot the DataFrame
         skjema = skjema.pivot_table(
@@ -156,12 +177,13 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             ]
 
             # Use the ParquetDataset to read multiple files
-            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            # dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+            foretak_pub = pd.read_parquet(fil_path, filesystem=fs)
             
-            table = dataset.read()
+#             table = dataset.read()
 
-            # Convert to Pandas DataFrame
-            foretak_pub = table.to_pandas()
+#             # Convert to Pandas DataFrame
+#             foretak_pub = table.to_pandas()
 
             # Check if current_year is 2022 or higher
             if current_year >= 2023:
@@ -178,7 +200,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             # fill tmp_no_p4005 nan with 0
             skjema['tmp_no_p4005'].fillna(0, inplace=True)
             
-            del foretak_pub, dataset, table
+            del foretak_pub
             
         if skjema_list == 'RA-1100':
             
@@ -338,8 +360,12 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
 
         bedrift.drop(columns_to_drop, axis=1, inplace=True)
+    
+        # Replace commas with dots in the specified columns
 
         columns_to_fill = ["gjeldende_omsetn_kr", "driftskost_kr"]
+        
+        bedrift[columns_to_fill] = bedrift[columns_to_fill].replace(',', '.', regex=True)
 
         # Convert columns to numeric, replacing non-convertible values with NaN
         bedrift[columns_to_fill] = bedrift[columns_to_fill].apply(
@@ -417,6 +443,23 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
         good_temp_df["distribution_count"] = good_temp_df.groupby("orgnr_n_1")[
             "gjeldende_omsetn_kr"
         ].transform(lambda x: (x > 0).sum())
+        
+        # Calculate 'bedrift_count' where 'gjeldende_bdr_syss' is not equal to 0
+        # Calculate 'bedrift_count' per 'orgnr_n_1'
+#         bedrift_counts = good_temp_df.groupby('orgnr_n_1')['gjeldende_bdr_syss'].apply(lambda x: (x != 0).sum())
+
+#         # Map the counts back to the DataFrame
+#         good_temp_df['bedrift_count'] = good_temp_df['orgnr_n_1'].map(bedrift_counts)
+
+#         # Calculate 'distribution_count' per 'orgnr_n_1'
+#         distribution_counts = good_temp_df.groupby('orgnr_n_1').apply(
+#             lambda g: ((g['gjeldende_bdr_syss'] != 0) & (g['gjeldende_omsetn_kr'] > 0)).sum()
+#         )
+
+#         # Map the counts back to the DataFrame
+#         good_temp_df['distribution_count'] = good_temp_df['orgnr_n_1'].map(distribution_counts)
+
+
 
         # Create 'bad_temp' DataFrame based on conditions
         # bad_temp = good_temp_df[
@@ -484,28 +527,45 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
         del onlygooddriftskostnader
                  
-        if uu_data and current_year == year:
+        if uu_data and (current_year == year or current_year == prior_year):
+            
+            start_uu = time.time()
             
             print("uu_data for:", {current_year}, "is True, proceeding with data processing...")
             
-            fil_path = [
-                f
-                for f in fs.glob(
-                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={year}/statistikkfil_bedrifter_pub.parquet"
-                )
-                if f.endswith(".parquet")
+            temp_prior_year= current_year - 1
+            
+#             fil_path = [
+#                 f
+#                 for f in fs.glob(
+#                     f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={current_year}/statistikkfil_bedrifter_pub.parquet"
+#                 )
+#                 if f.endswith(".parquet")
+#             ]
+            
+        
+
+#             # Use the ParquetDataset to read multiple files
+#             dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+#             table = dataset.read()
+
+#             # Convert to Pandas DataFrame
+#             bedrift_pub = table.to_pandas()
+
+            columns_needed = [
+                'ts_forbruk', 'naring_f', 'orgnr_foretak', 'ts_salgsint', 'omsetning',
+                'nopost_p4005', 'nopost_driftskostnader', 'kommune', 'sysselsetting_syss',
+                'naring', 'orgnr_bedrift', 'reg_type_f', 'type'
             ]
 
-            # Use the ParquetDataset to read multiple files
-            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-            table = dataset.read()
+            file_path = f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={current_year}/statistikkfil_bedrifter_pub.parquet"
 
-            # Convert to Pandas DataFrame
-            bedrift_pub = table.to_pandas()
+            f = FileClient.gcs_open(file_path)
+            bedrift_pub = pl.read_parquet(f, columns=columns_needed)
+
+            bedrift_pub = bedrift_pub.to_pandas()
             
             bedrift_pub.columns = bedrift_pub.columns.str.lower()
-
-            del table, dataset
 
             # filter for when reg_type_f = 01
             bedrift_pub = bedrift_pub[bedrift_pub['reg_type_f'] == '01']
@@ -535,24 +595,33 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             bedrift_pub['tmp_salgsint_bed'] = bedrift_pub['salgsint']
             bedrift_pub['id'] = bedrift_pub['orgnr_n_1']
             
-            fil_path = [
-                f
-                for f in fs.glob(
-                    f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={fjor}/statistikkfil_bedrifter_pub.parquet"
-                )
-                if f.endswith(".parquet")
+#             fil_path = [
+#                 f
+#                 for f in fs.glob(
+#                     f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={temp_prior_year}/statistikkfil_bedrifter_pub.parquet"
+#                 )
+#                 if f.endswith(".parquet")
+#             ]
+
+#             # Use the ParquetDataset to read multiple files
+#             dataset = pq.ParquetDataset(fil_path, filesystem=fs)
+#             table = dataset.read()
+
+#             # Convert to Pandas DataFrame
+#             bedrift_pub_x = table.to_pandas()
+
+            columns_needed_x = [
+                'reg_type_f', 'orgnr_bedrift', 'sysselsetting_syss'
             ]
 
-            # Use the ParquetDataset to read multiple files
-            dataset = pq.ParquetDataset(fil_path, filesystem=fs)
-            table = dataset.read()
+            file_path = f"gs://ssb-strukt-naering-data-produkt-prod/naringer/klargjorte-data/statistikkfiler/aar={temp_prior_year}/statistikkfil_bedrifter_pub.parquet"
 
-            # Convert to Pandas DataFrame
-            bedrift_pub_x = table.to_pandas()
+            f = FileClient.gcs_open(file_path)
+            bedrift_pub_x = pl.read_parquet(f, columns=columns_needed_x)
+
+            bedrift_pub_x = bedrift_pub_x.to_pandas()
             
             bedrift_pub_x.columns = bedrift_pub_x.columns.str.lower()
-
-            del dataset, table
 
             bedrift_pub_x = bedrift_pub_x[bedrift_pub_x['reg_type_f'] == '01']
 
@@ -584,6 +653,11 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             
 
             del bedrift_pub
+            
+            # Calculate processing time
+            processing_time_uu = time.time() - start_uu
+            print(f"Time taken to process uu data for {current_year}: {processing_time_uu:.2f} seconds")
+        
         else:
             print("uu_data is False, skipping data processing.")
         
@@ -595,6 +669,9 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
         # kpi_df = kpi.process_kpi_data(current_year)
         
         # Get kommune population growth , income trends and inflation data 
+        
+        api_time = time.time()
+        
         try:
             kommune_befolk = kommune_pop.befolkning_behandling(current_year, fjor)
         except Exception as e:
@@ -624,6 +701,11 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
             except Exception as e:
                 print(f"Failed to fetch kpi_df for {current_year - 1} as well.")
                 kpi_df = None
+                
+        processing_time_api = time.time() - api_time
+        print(f"Time taken to process kommune data, population data and inflation data for {current_year}: {processing_time_api:.2f} seconds")
+        
+        
         # Convert string columns to numeric
         merged_df["gjeldende_bdr_syss"] = pd.to_numeric(
             merged_df["gjeldende_bdr_syss"], errors="coerce"
@@ -924,7 +1006,13 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     current_year_good_oms = good_data[good_data['year'] == year]
     current_year_bad_oms = bad_data[bad_data['year'] == year]
     v_orgnr_list_for_imputering = current_year_bad_oms['v_orgnr'].tolist()
-    unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith(tosiffernaring)]['id'].unique().tolist()   
+    # unique_id_list = current_year_bad_oms[current_year_bad_oms['nacef_5'].str.startswith(tosiffernaring)]['id'].unique().tolist()   
+    # If tosiffernaring contains multiple categories, filter by checking if 'nacef_5' starts with any of them
+    
+    unique_id_list = current_year_bad_oms[
+        current_year_bad_oms['nacef_5'].str[:2].isin(tosiffernaring)
+    ]['id'].unique().tolist()
+
     
     # Easy solution for filling Nan Values - only for training, not for editing real data
     training_data['tmp_sn2007_5'].fillna(training_data['nacef_5'], inplace=True)
@@ -934,6 +1022,12 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     # training_data['new_oms'] = training_data['new_oms'].str.replace(',', '.').astype(float)
     
     # Create trend data
+    
+    # Calculate processing time
+    processing_time_datafile_loop = time.time() - start_datafile_loop
+    print(f"Time taken to create base training data: {processing_time_datafile_loop:.2f} seconds")
+    
+    oms_trend_time = time.time()
     
     print("starting regression line function")
     # Determine the number of CPU cores available
@@ -946,7 +1040,7 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
     # Sort the data
     training_data = training_data.sort_values(by=["v_orgnr", "year"])
-
+    
     # Function to process each group
     def process_group(v_orgnr, group):
         group_forecast = group[["v_orgnr", "year"]].copy()
@@ -975,6 +1069,9 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
 
     # Concatenate results
     trend_forecasts = pd.concat(results, ignore_index=True)
+    
+    processing_time_trends = time.time() - start_datafile_loop
+    print(f"Time taken to create base training data: {processing_time_trends:.2f} seconds")
 
     # Merge the trend forecasts with the original training data
     training_data = pd.merge(training_data, trend_forecasts, on=["v_orgnr", "year"], how="left")
@@ -1117,3 +1214,5 @@ def main(year, limit, skjema_nr, distribtion_percent, tosiffernaring, geo_data=F
     training_data = training_data[~training_data['v_orgnr'].isin(v_orgnr_list_for_imputering)]
     
     return current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list
+    
+

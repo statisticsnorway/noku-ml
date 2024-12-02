@@ -67,14 +67,66 @@ import create_datafiles
 
 
 
-def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distribtion_percent, rerun_ml=False, geo_data=False, uu_data=False, GridSearch=False):
+def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distribtion_percent, rerun_ml=False, geo_data=False, uu_data=False, GridSearch=False, collect_data=False):
 
     start_time = time.time()
     
-    print('starting to collect data')
+    tosiffernaring_str = '_'.join(tosiffernaring)
     
-    # Generate the data required for processing using the create_datafiles.main function
-    current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list = create_datafiles.main(year, rate, skjema, distribtion_percent, tosiffernaring, geo_data=geo_data, uu_data=uu_data)
+    if collect_data:
+    
+        print('starting to collect data')
+
+        # Generate the data required for processing using the create_datafiles.main function
+        current_year_good_oms, current_year_bad_oms, v_orgnr_list_for_imputering, training_data, imputatable_df, time_series_df, unique_id_list = create_datafiles.main(year, rate, skjema, distribtion_percent, tosiffernaring, geo_data=geo_data, uu_data=uu_data)
+        
+        current_year_good_oms['orgnr_n_1'] = current_year_good_oms['orgnr_n_1'].astype(str)
+        current_year_bad_oms['orgnr_n_1'] = current_year_bad_oms['orgnr_n_1'].astype(str)
+        training_data['orgnr_n_1'] = training_data['orgnr_n_1'].astype(str)
+        imputatable_df['orgnr_n_1'] = imputatable_df['orgnr_n_1'].astype(str)
+        current_year_good_oms['tmp_no_p4005'] = pd.to_numeric(current_year_good_oms['tmp_no_p4005'], errors='coerce')
+        current_year_bad_oms['tmp_no_p4005'] = pd.to_numeric(current_year_bad_oms['tmp_no_p4005'], errors='coerce')
+        time_series_df['orgnr_n_1'] = time_series_df['orgnr_n_1'].astype(str)
+        time_series_df['tmp_no_p4005'] = pd.to_numeric(time_series_df['tmp_no_p4005'], errors='coerce')
+        
+        v_orgnr_list_for_imputering_df = pd.DataFrame(v_orgnr_list_for_imputering, columns=['v_orgnr'])
+        unique_id_list_df = pd.DataFrame(unique_id_list, columns=['id'])
+
+        
+        current_year_good_oms.to_parquet(
+        f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/good_oms/skjema={skjema}/aar={year}/current_year_good_oms_{tosiffernaring_str}.parquet", filesystem=fs)
+
+        current_year_bad_oms.to_parquet(
+        f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/bad_oms/skjema={skjema}/aar={year}/current_year_bad_oms.parquet_{tosiffernaring_str}", filesystem=fs)
+
+        v_orgnr_list_for_imputering_df.to_parquet(
+        f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/imputering_list/skjema={skjema}/aar={year}/v_orgnr_list_for_imputering_{tosiffernaring_str}.parquet", filesystem=fs)
+
+        training_data.to_parquet(
+        f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/training_data/skjema={skjema}/aar={year}/training_data_{tosiffernaring_str}.parquet", filesystem=fs)
+
+        imputatable_df.to_parquet(
+        f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/trenger_imputering_dfs/skjema={skjema}/aar={year}/imputable_df_{tosiffernaring_str}.parquet", filesystem=fs)
+
+        unique_id_list_df.to_parquet(
+            f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/unique_id_list/skjema={skjema}/aar={year}/unique_id_list_{tosiffernaring_str}.parquet", filesystem=fs)
+        
+        time_series_df.to_parquet(
+            f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/time_series/skjema={skjema}/aar={year}/time_series_{tosiffernaring_str}.parquet", filesystem=fs)
+            
+    else:
+
+        current_year_good_oms = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/good_oms/skjema={skjema}/aar={year}/current_year_good_oms_{tosiffernaring_str}.parquet", filesystem=fs)
+        current_year_bad_oms = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/bad_oms/skjema={skjema}/aar={year}/current_year_bad_oms.parquet_{tosiffernaring_str}", filesystem=fs)
+        v_orgnr_list_for_imputering_df = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/imputering_list/skjema={skjema}/aar={year}/v_orgnr_list_for_imputering_{tosiffernaring_str}.parquet", filesystem=fs)
+        training_data = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/training_data/skjema={skjema}/aar={year}/training_data_{tosiffernaring_str}.parquet", filesystem=fs)
+        imputatable_df = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/trenger_imputering_dfs/skjema={skjema}/aar={year}/imputable_df_{tosiffernaring_str}.parquet", filesystem=fs)
+        unique_id_list_df = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/unique_id_list/skjema={skjema}/aar={year}/unique_id_list_{tosiffernaring_str}.parquet", filesystem=fs)
+        time_series_df = pd.read_parquet(f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/arbeidsfiler/time_series/skjema={skjema}/aar={year}/time_series_{tosiffernaring_str}.parquet", filesystem=fs)
+
+        v_orgnr_list_for_imputering = v_orgnr_list_for_imputering_df['v_orgnr'].tolist()
+        unique_id_list = unique_id_list_df['id'].tolist()
+        
 
     # Construct the function name dynamically based on the model parameter
     function_name = f"{model}"
@@ -96,20 +148,23 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
         else:
             # Call the function without the additional parameters
             imputed_df = function_to_call(training_data, scaler, imputatable_df, year, GridSearch=GridSearch)
+            
+        # Ensure the problematic column is of string type
+        imputed_df['orgnr_n_1'] = imputed_df['orgnr_n_1'].astype(str)
 
         imputed_df.to_parquet(
-            f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet",
+            f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring_str}_{model}.parquet",
             storage_options={"token": AuthClient.fetch_google_credentials()},
         )
 
-        print("finsihed machine learning model training, starting final treatment of update file")
+        print("finished machine learning model training, starting final treatment of update file")
     else:
         print('not rerunning ml model, read in data from GCP file path')
 
         fil_path = [
             f
             for f in fs.glob(
-                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring}_{model}.parquet"
+                f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/imputert-skjema-data/aar={year}/skjema={skjema}/imputed_{tosiffernaring_str}_{model}.parquet"
             )
             if f.endswith(".parquet")
         ]
@@ -126,14 +181,27 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
 
     # Extract the relevant columns from the imputed DataFrame for merging
     df_to_merge = imputed_df[['v_orgnr', 'year', 'id', 'predicted_oms']]
-    
-    test8 = imputed_df.copy()
 
     # Merge the imputed DataFrame with the current year's bad data on 'v_orgnr', 'id', and 'year'
     bad_df = pd.merge(current_year_bad_oms, df_to_merge, on=['v_orgnr', 'id', 'year'], how='left')
 
     # Assign the 'predicted_oms' values to a new column 'new_oms'
     bad_df['new_oms'] = bad_df['predicted_oms']
+    
+    # Set 'new_oms' to 0 where 'gjeldende_bdr_syss' is 0
+    # bad_df.loc[bad_df['gjeldende_bdr_syss'] == 0, 'new_oms'] = 0
+    
+    bad_df["n3"] = bad_df["nacef_5"].str[:4]
+    bad_df["n2"] = bad_df["nacef_5"].str[:2]
+    
+    # Set 'new_oms' to 0 where 'gjeldende_bdr_syss' is 0 AND 'n3' is not '47.3' AND 'n2' is not 68
+    bad_df.loc[
+        (bad_df['gjeldende_bdr_syss'] == 0) & 
+        (bad_df['n3'] != '47.3') & 
+        (bad_df['n2'] != '68'), 
+        'new_oms'
+    ] = 0
+
 
     # Drop the 'predicted_oms' column as it is no longer needed
     bad_df.drop(['predicted_oms'], axis=1, inplace=True)
@@ -1117,36 +1185,62 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
         timeseries_knn_agg = pd.DataFrame({'explanation': ['placeholder until code is set up for this skjema']})
         timeseries_knn__kommune_agg = pd.DataFrame({'explanation': ['placeholder until code is set up for this skjema']})
 
-        
     
-    filtered_df = oppdateringsfil[oppdateringsfil['v_orgnr'].isin(v_orgnr_list_for_imputering)]
+    # Filter based on 'nacef_5' starting with values in 'tosiffernaring' and excluding rows where 'regtype' is '01'
+    unique_id_list = current_year_bad_oms[
+        current_year_bad_oms['nacef_5'].str[:2].isin(tosiffernaring) & 
+        (current_year_bad_oms['regtype'] != '01')
+    ]['id'].unique().tolist()
+
     
-    unique_id_count = filtered_df[filtered_df['n2_f'] == {tosiffernaring}]['id'].nunique()
+    print(unique_id_list)
+    
+    # filtered_df = oppdateringsfil[oppdateringsfil['v_orgnr'].isin(unique_id_list)]
+    
+    filtered_df = oppdateringsfil[oppdateringsfil['id'].isin(unique_id_list)]
+    
+    print(filtered_df.head())
+    
+    # Use .isin() to filter by multiple categories in 'tosiffernaring'
+    unique_id_count = filtered_df[filtered_df['n2_f'].isin(tosiffernaring)]['id'].nunique()
 
     print(f"Number of unique 'id' where 'n2_f' is {tosiffernaring}: {unique_id_count}")
 
     # Get the unique 'id' values as a list where 'n2_f' is 45
     # unique_ids_list = filtered_df[filtered_df['n2_f'] == {tosiffernaring}]['id'].unique().tolist()
-    unique_ids_list = filtered_df[(filtered_df['n2_f'] == tosiffernaring) & (filtered_df['regtype'] != '01')]['id'].unique().tolist()
+    
+    # Use .isin() in your filter to match multiple categories
+    # unique_ids_list = filtered_df[(filtered_df['n2_f'].isin(tosiffernaring)) & (filtered_df['regtype'] != '01')]['id'].unique().tolist()
 
 
     # Print the list of unique IDs
-    print(f"Unique 'id' values where 'n2_f' is {tosiffernaring}: {unique_ids_list}")
+    print(f"Unique 'id' values where 'n2_f' is {tosiffernaring}: {unique_id_list}")
     
 
     # rename variables in filtered_df
     
-    filtered_df = filtered_df[filtered_df['n2_f'] == {tosiffernaring}]
+    # filtered_df = filtered_df[filtered_df['n2_f'].isin(tosiffernaring)]
     
     til_bakken = filtered_df[['id', 'v_orgnr', 'oms', 'new_drkost']]
 
     til_bakken = til_bakken.rename(columns={'id': 'enhets_id', 'v_orgnr': 'orgnr_bedrift', 'oms': 'gjeldende_omsetn_kr', 'new_drkost': 'gjeldende_driftsk_kr'})
     
+    import datetime
+
+    # Get the current date and format it (e.g., YYYYMMDD)
+    current_date = datetime.datetime.now().strftime("%d%m%Y")  # Format as 'DDMMYYYY'
+
+    # Define your destination path with the current date dynamically inserted
+    destination_path = f"gs://ssb-strukt-naering-data-produkt-prod/naringer/inndata/maskin-laering/oppdaterte_filer/skjema={skjema}/aar={year}/til_bakken_{current_date}_{model}_{tosiffernaring}.parquet"
+
+    # Save the parquet file with the dynamic date in the file name
+    til_bakken.to_parquet(destination_path, filesystem=fs, index=False)
+
    
     # Calculate processing time
     processing_time = time.time() - start_time
-    print(f"Time taken to create training data: {processing_time:.2f} seconds")
+    print(f"Time taken to run program with selected critera: {processing_time:.2f} seconds")
     
     # Return the processed dataframes
-    return oppdateringsfil, timeseries_knn_agg, timeseries_knn__kommune_agg, check_totals, check_manually, v_orgnr_list_for_imputering, til_bakken, unique_id_list
+    return oppdateringsfil, timeseries_knn_agg, timeseries_knn__kommune_agg, check_totals, check_manually, v_orgnr_list_for_imputering, til_bakken, unique_id_list, current_year_bad_oms
 

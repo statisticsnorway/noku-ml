@@ -100,10 +100,11 @@ def holymoly(year, start_year, words):
             skjema_df.columns = skjema_df.columns.str.lower()  # Convert column names to lower case
 
             happy_days.append(skjema_df)
-
+            
     # Concatenate all DataFrames into a single DataFrame
     happy_days = pd.concat(happy_days, ignore_index=True)
     
+
     def count_words_in_row(row, words):
         count = 0
         exclamation_count = 0
@@ -142,6 +143,61 @@ def holymoly(year, start_year, words):
     happy_days['n2'] = happy_days['nacef_5'].str[:2]
     
     happy_days = happy_days.reset_index(drop=True)
+    
+    # Dictionary for hard-keyed replacements
+    replacement_dict = {
+        '41': 'Oppføring av bygninger (41)',
+        '42': 'Anleggsvirksomhet (42)',
+        '43': 'Spesialisert bygge-og anleggsvirksomhet (43)',
+        '45': 'Handel med reparasjon av motorvogner (45)',
+        '46': 'Agentur- og engroshandel, unntatt med motorvogner (46)',
+        '47': 'Detaljhandel, unntatt med motorvogner (47)',
+        '56': 'Serveringsvirksomhet (56)',
+        '62': 'Tjenester tilknyttet informasjonsteknologi (62)',
+        '68': 'Omsetning og drift av fast eiendom (68)',
+        '69': 'Juridisk og regnskapsmessig tjenesteyting (69)',
+        '70': 'Hovedkontortjenester, administrativ rådgivning (70)',
+        '71': 'Arkitektvirksomhet og teknisk konsulentvirksomhet, og teknisk prøving og analyse (71)',
+        '72': 'Forskning og utviklingarbeid (72)',
+        '73': 'Annonse- og reklamevirksomhet og markedsundersøkelser (73)',
+        '74': 'Annen faglig, vitenskapelig og teknisk virksomhet (74)',
+        '77': 'Utlei- og leasingvirksomhet (77)',
+        '78': 'Arbeidskrafttjenester (78)',
+        '79': 'Reisebyrå- og reisarrangeørvirksomhet og tilknyttede tjenester (79)',
+        '80': 'Vakttjeneste og etterforsking (80)',
+        '81': 'Tjenester tilknyttet eiendomsdrift (81)',
+        '82': 'Annen forretningsmessig tjenesteyting (82)',
+        '95': 'Reparasjon av datamaskiner, husholdingsvarer og varer til personlig bruk (95)',
+        '96': 'Annen personlig tjenesteyting (96)'
+    }
+    
+    replacement_dict_n3 = {
+        '41.1': 'Utvikling av byggeprosekter (41.1)',
+        '41.2': 'Oppføring av bygninger (41.2)',
+        '43.1': 'Riving og grunnarbeid (43.1)',
+        '43.2': 'Elektrisk installasjonsarbeid, VVS-arbeid og annet installasjonsarbeid (43.2)',
+        '45.2': 'Vedlikehold og reparasjon av motorvogner, unntatt motorsykler (45.2)',
+        '46.2': 'Engroshandel med jordbruksråvarer og levende dyr (46.2)',
+        '46.3': 'Engroshandel med nærings-og sytelsesmidler (46.3)',
+        '46.4': 'Engroshandel med husholdningsvarer og varer til personlig bruk (46.4)',
+        '46.6': 'Engroshandel med andre maskiner og annet utstyr (46.6)',
+        '46.7': 'Engroshandel med spesialisert vareutvalg ellers (46.7)',
+        '47.1': 'Butikkhandel med bredt vareutvalg (47.1)',
+        '47.3': 'Detaljhandel med drivstoff til motorvogner (47.3)',
+        '47.5': 'Butikkhandel med andre husholdingsvarer i spesialforretninger (47.5)',
+        '47.6': 'Butikkhandel med bøker, musikkartikler og andre fritidsartikler i spesialforretninger (47.6)',
+        '47.7': 'Annen butikkhandel i spesialforretninger (47.7)',
+        '68.2': 'Utleie av egen eller leid fast eiendom (68.2)',
+        '69.2': 'Regnskap, revisjon og skatterådgivning (69.2)',
+        '71.1': 'Arkitektvirksomhet og teknisk konsulentvirksomhet (71.1)',
+        '77.3': 'Utleie og leasing av andre maskiner, og annet utstyr og materiell (77.3)',
+        '81.2': 'Rengjøringsvirksomhet (81.2)'
+    }
+
+    # Replace values in the 'n2' column
+    happy_days['n2'] = happy_days['n2'].replace(replacement_dict)
+    
+    happy_days['n3'] = happy_days['n3'].replace(replacement_dict_n3)
 
     # sort exclamation_count and count
     happy_days = happy_days.sort_values(by=["exclamation_count", "count"], ascending=False)
@@ -270,6 +326,7 @@ def holymoly(year, start_year, words):
 
         # Sort the DataFrame by 'count' in descending order
         df = df.sort_values(by='count', ascending=False)
+        
 
         # Create a horizontal bar chart with a predefined color sequence
         fig = px.bar(
@@ -279,9 +336,9 @@ def holymoly(year, start_year, words):
             color='n2',     # Color bars by 'n2'
             color_discrete_sequence=px.colors.sequential.Viridis,  # Use the Viridis color sequence
             orientation='h',  # Make the bars horizontal
-            height=1200,    # Set height of the plot
-            width=900,      # Set width of the plot
-            title='The total amount of swear words used per n2 from 2017 to 2021'  # Add title
+            height=1400,    # Set height of the plot
+            width=2800,      # Set width of the plot
+            title='Total banneord brukt per n2 fra 2017 til 2021'  # Add title
         )
 
         # Ensure y-axis categories are sorted by 'count'
@@ -309,9 +366,9 @@ def holymoly(year, start_year, words):
             color='n3',     # Color bars by 'n2'
             color_discrete_sequence=px.colors.sequential.Viridis,  # Use the Viridis color sequence
             orientation='h',  # Make the bars horizontal
-            height=1200,    # Set height of the plot
-            width=900,      # Set width of the plot
-            title='The total amount of swear words used per n3 from 2017 to 2021'  # Add title
+            height=1400,    # Set height of the plot
+            width=2800,      # Set width of the plot
+            title='Total banneord brukt per n3 fra 2017 til 2021'  # Add title
         )
 
         # Ensure y-axis categories are sorted by 'count'
@@ -337,9 +394,9 @@ def holymoly(year, start_year, words):
             color='n2',     # Color bars by 'n2'
             color_discrete_sequence=px.colors.sequential.Viridis,  # Use the Viridis color sequence
             orientation='h',  # Make the bars horizontal
-            height=1200,    # Set height of the plot
-            width=900,      # Set width of the plot
-            title='The Total Explanation Points used per n2 from 2017 to 2021'  # Add title
+            height=1400,    # Set height of the plot
+            width=2800,      # Set width of the plot
+            title='Total utropstegn brukt per n2 fra 2017 til 2021'  # Add title
         )
 
         # Apply a logarithmic scale to the x-axis
@@ -370,9 +427,9 @@ def holymoly(year, start_year, words):
             color='n3',     # Color bars by 'n2'
             color_discrete_sequence=px.colors.sequential.Viridis,  # Use the Viridis color sequence
             orientation='h',  # Make the bars horizontal
-            height=900,    # Set height of the plot
-            width=800,      # Set width of the plot
-            title='The Total Explanation Points used per n3 from 2017 to 2021'  # Add title
+            height=1400,    # Set height of the plot
+            width=2800,      # Set width of the plot
+            title='Total utropstegn brukt per n3 fra 2017 til 2021'  # Add title
         )
 
         # Apply a logarithmic scale to the x-axis
@@ -442,9 +499,9 @@ def holymoly(year, start_year, words):
         # Update layout
         fig.update_layout(
             yaxis=dict(range=[-10, df['count'].max() + 20]),  # Extend y-axis to make space for knuckles
-            title='Is the distribution of swear words across industries trying to tell us something? 🤷‍♂️',
-            height=800,
-            width=1000,
+            title='Prøver fordelingen av banneord på tvers av bransjer å fortelle oss noe?? 🤷‍♂️',
+            height=1500,
+            width=900,
             showlegend=False  # Hide legend if you don't want to show it
         )
 
