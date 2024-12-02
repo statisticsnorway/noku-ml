@@ -181,14 +181,27 @@ def create_bedrift_fil(year, model, rate, scaler, skjema, tosiffernaring, distri
 
     # Extract the relevant columns from the imputed DataFrame for merging
     df_to_merge = imputed_df[['v_orgnr', 'year', 'id', 'predicted_oms']]
-    
-    test8 = imputed_df.copy()
 
     # Merge the imputed DataFrame with the current year's bad data on 'v_orgnr', 'id', and 'year'
     bad_df = pd.merge(current_year_bad_oms, df_to_merge, on=['v_orgnr', 'id', 'year'], how='left')
 
     # Assign the 'predicted_oms' values to a new column 'new_oms'
     bad_df['new_oms'] = bad_df['predicted_oms']
+    
+    # Set 'new_oms' to 0 where 'gjeldende_bdr_syss' is 0
+    # bad_df.loc[bad_df['gjeldende_bdr_syss'] == 0, 'new_oms'] = 0
+    
+    bad_df["n3"] = bad_df["nacef_5"].str[:4]
+    bad_df["n2"] = bad_df["nacef_5"].str[:2]
+    
+    # Set 'new_oms' to 0 where 'gjeldende_bdr_syss' is 0 AND 'n3' is not '47.3' AND 'n2' is not 68
+    bad_df.loc[
+        (bad_df['gjeldende_bdr_syss'] == 0) & 
+        (bad_df['n3'] != '47.3') & 
+        (bad_df['n2'] != '68'), 
+        'new_oms'
+    ] = 0
+
 
     # Drop the 'predicted_oms' column as it is no longer needed
     bad_df.drop(['predicted_oms'], axis=1, inplace=True)
