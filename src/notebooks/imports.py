@@ -50,6 +50,7 @@ import create_datafiles
 import ml_modeller
 import dash_application
 import oppdateringsfil
+import viktige_lister
 
 fs = FileClient.get_gcs_file_system()
 
